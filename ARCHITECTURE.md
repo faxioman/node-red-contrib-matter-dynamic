@@ -47,8 +47,32 @@ This project implements dynamic Matter device nodes for Node-RED, allowing users
 
 ## Current Issues & Solutions
 
-### Issue 1: Events Not Firing
-- **Symptom**: Matter.js logs show commands but Node-RED doesn't emit
+### ✅ Issue 1: Events Not Firing (RESOLVED)
+- **Symptom**: Matter.js logs showed commands but Node-RED didn't emit messages
+- **Root Cause**: Event properties ending with `$Changed` are not enumerable in Matter.js
+- **Solution**: Subscribe to events based on state attributes instead of iterating event properties
+```javascript
+// Instead of iterating events, use state attributes:
+if (node.device.state && node.device.state[clusterName]) {
+    Object.keys(node.device.state[clusterName]).forEach(attributeName => {
+        const eventName = `${attributeName}$Changed`;
+        if (clusterEvents[eventName]) {
+            clusterEvents[eventName].on(handler);
+        }
+    });
+}
+```
+
+### ✅ Issue 2: Multiple Event Emissions (RESOLVED)
+- **Symptom**: Each HomeKit action triggered 3 identical messages
+- **Root Cause**: `serverReady` event emitted multiple times when devices register
+- **Solution**: Added flag to prevent multiple subscriptions
+```javascript
+if (node.eventsSubscribed) {
+    return; // Prevent duplicate subscriptions
+}
+node.eventsSubscribed = true;
+```
 
 ## Code Structure
 
@@ -67,13 +91,37 @@ node.bridge.registerChild(node);
 
 ### Dynamic Event Subscription
 ```javascript
+// Events ending with $Changed are not enumerable, so we use state attributes
 Object.keys(node.device.events).forEach(clusterName => {
-    Object.keys(node.device.events[clusterName]).forEach(eventName => {
-        if (eventName.endsWith('$Changed')) {
-            // Subscribe to state changes
-        }
-    });
+    if (node.device.state && node.device.state[clusterName]) {
+        Object.keys(node.device.state[clusterName]).forEach(attributeName => {
+            const eventName = `${attributeName}$Changed`;
+            if (node.device.events[clusterName][eventName]) {
+                // Subscribe to state change
+                node.device.events[clusterName][eventName].on((value, oldValue, context) => {
+                    const msg = { payload: {} };
+                    msg.payload[clusterName] = {};
+                    msg.payload[clusterName][attributeName] = value;
+                    node.send(msg);
+                });
+            }
+        });
+    }
 });
+```
+
+### Event Cleanup
+Proper cleanup on node close to prevent memory leaks:
+```javascript
+// Store handlers for cleanup
+node.eventHandlers[`${clusterName}.${eventName}`] = handler;
+
+// On close, remove all event listeners
+for (const [handlerKey, handler] of Object.entries(node.eventHandlers)) {
+    const [clusterName, eventName] = handlerKey.split('.');
+    await node.device.events[clusterName][eventName].off(handler);
+}
+node.removeAllListeners('serverReady');
 ```
 
 ## Payload Format Examples
@@ -93,11 +141,26 @@ msg.payload = {onOff: {onOff: false}}
 msg.payload = {temperatureMeasurement: {measuredValue: 2150}}
 ```
 
+## Key Implementation Details
+
+### Event Discovery
+Matter.js events ending with `$Changed` are not enumerable properties. The solution uses the device state to discover available attributes and then checks for corresponding events:
+
+1. Iterate through `node.device.state` clusters
+2. For each attribute in the state, check if `${attribute}$Changed` event exists
+3. Subscribe only to existing events
+
+### Performance Considerations
+- Single event subscription per attribute (prevented by flag)
+- Proper cleanup prevents memory leaks
+- 2-second delay after `serverReady` ensures Matter.js initialization
+
 ## Next Steps
 
-1. **Fix Event Emission**: Ensure events properly propagate from Matter.js to Node-RED
-2. **Add Examples**: Create comprehensive examples for common device types
-3. **Error Handling**: Better error messages for invalid configurations
+1. **Add More Examples**: Create comprehensive examples for all device types
+2. **Error Handling**: Better error messages for invalid configurations
+3. **Documentation**: Expand user documentation with more device examples
+4. **Testing**: Add automated tests for various device types
 
 ## Dependencies
 

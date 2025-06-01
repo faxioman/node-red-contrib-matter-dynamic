@@ -35,35 +35,38 @@ module.exports = function(RED) {
         node.pending = false;
         node.pendingmsg = null;
         node.passthrough = /^true$/i.test(config.passthrough);
+        node.eventHandlers = {}; // Store event handlers for cleanup
 
         // Dynamic event subscription
         node.subscribeToEvents = function() {
+            if (node.eventsSubscribed) {
+                node.log("Events already subscribed, skipping");
+                return;
+            }
+            
             if (!node.device || !node.device.events) {
                 node.error("Device or device.events not available");
                 return;
             }
             
-            node.log(`Subscribing to events for device type: ${deviceConfig.deviceType}`);
-            
+            node.eventsSubscribed = true;
             
             // Subscribe to all $Changed events dynamically
-            node.log("BEFORE FOREACH");
-            node.log(`Clusters available: ${Object.keys(node.device.events).join(', ')}`);
-            
             Object.keys(node.device.events).forEach(clusterName => {
-                node.log(`INSIDE FOREACH: ${clusterName}`);
                 if (clusterName === 'identify') {
-                    node.log("Skipping identify cluster");
                     // Handle identify separately
+                    node.identifyStartHandler = () => {
+                        node.status({fill:"blue", shape:"dot", text:"identify"});
+                    };
+                    node.identifyStopHandler = () => {
+                        node.status({fill:"green", shape:"dot", text:"ready"});
+                    };
+                    
                     if (node.device.events.identify.startIdentifying) {
-                        node.device.events.identify.startIdentifying.on(() => {
-                            node.status({fill:"blue", shape:"dot", text:"identify"});
-                        });
+                        node.device.events.identify.startIdentifying.on(node.identifyStartHandler);
                     }
                     if (node.device.events.identify.stopIdentifying) {
-                        node.device.events.identify.stopIdentifying.on(() => {
-                            node.status({fill:"green", shape:"dot", text:"ready"});
-                        });
+                        node.device.events.identify.stopIdentifying.on(node.identifyStopHandler);
                     }
                     return;
                 }
@@ -73,25 +76,15 @@ module.exports = function(RED) {
                     return;
                 }
                 
-                node.log(`Checking events in cluster: ${clusterName}`);
-                
-                // Try different methods to get all properties
-                const eventNames = Object.keys(clusterEvents);
-                const propNames = Object.getOwnPropertyNames(clusterEvents);
-                const allNames = [...new Set([...eventNames, ...propNames])];
-                
-                node.log(`Object.keys in ${clusterName}: ${eventNames.join(', ')}`);
-                node.log(`getOwnPropertyNames in ${clusterName}: ${propNames.join(', ')}`);
-                node.log(`All properties in ${clusterName}: ${allNames.join(', ')}`);
-                
                 // Subscribe based on state attributes
                 if (node.device.state && node.device.state[clusterName]) {
                     Object.keys(node.device.state[clusterName]).forEach(attributeName => {
                         const eventName = `${attributeName}$Changed`;
                         if (clusterEvents[eventName]) {
-                            node.log(`Found ${clusterName}.${eventName}, subscribing...`);
                             try {
-                                clusterEvents[eventName].on((value, oldValue, context) => {
+                                // Create handler function
+                                const handlerKey = `${clusterName}.${eventName}`;
+                                node.eventHandlers[handlerKey] = (value, oldValue, context) => {
                                     const msg = {
                                         payload: {}
                                     };
@@ -109,10 +102,11 @@ module.exports = function(RED) {
                                     }
                                     
                                     node.send(msg);
-                                });
-                                node.log(`Subscribed to ${clusterName}.${eventName}`);
+                                };
+                                
+                                clusterEvents[eventName].on(node.eventHandlers[handlerKey]);
                             } catch (err) {
-                                node.error(`Failed to subscribe: ${err.message}`);
+                                node.error(`Failed to subscribe to ${clusterName}.${eventName}: ${err.message}`);
                             }
                         }
                     });
@@ -155,7 +149,6 @@ module.exports = function(RED) {
 
         this.on('serverReady', function() {
             var node = this;
-            node.log("Server ready event received");
             
             // Check device state immediately
             if (!node.device) {
@@ -166,27 +159,39 @@ module.exports = function(RED) {
             node.log(`Device state available: ${!!node.device.state}`);
             node.log(`Device events available: ${!!node.device.events}`);
             
-            // Log device structure for debugging
-            if (node.device.state) {
-                node.log(`Device state structure: ${JSON.stringify(Object.keys(node.device.state))}`);
-            }
-            if (node.device.events) {
-                Object.keys(node.device.events).forEach(cluster => {
-                    const eventNames = Object.keys(node.device.events[cluster]);
-                    node.log(`Events in ${cluster}: ${eventNames.join(', ')}`);
-                });
-            }
-            
             // NEED delay for Matter.js device initialization
             setTimeout(() => {
-                node.log("Starting event subscription after delay");
                 node.subscribeToEvents();
                 node.status({fill:"green", shape:"dot", text:"ready"});
             }, 2000);
         });
 
         this.on('close', async function(removed, done) {
-            node.log(`Closing device: ${this.id}`);
+            const rtype = removed ? 'Device was removed/disabled' : 'Device was restarted';
+            node.log(`Closing device: ${this.id}, ${rtype}`);
+
+            // Remove Matter.js Events
+            if (node.device && node.device.events) {
+                for (const [handlerKey, handler] of Object.entries(node.eventHandlers)) {
+                    const [clusterName, eventName] = handlerKey.split('.');
+                    if (node.device.events[clusterName] && node.device.events[clusterName][eventName]) {
+                        await node.device.events[clusterName][eventName].off(handler);
+                    }
+                }
+                
+                // Remove identify events
+                if (node.device.events.identify) {
+                    if (node.identifyStartHandler && node.device.events.identify.startIdentifying) {
+                        await node.device.events.identify.startIdentifying.off(node.identifyStartHandler);
+                    }
+                    if (node.identifyStopHandler && node.device.events.identify.stopIdentifying) {
+                        await node.device.events.identify.stopIdentifying.off(node.identifyStopHandler);
+                    }
+                }
+            }
+
+            // Remove Node-RED Custom Events
+            node.removeAllListeners('serverReady');
 
             // Remove from bridge
             if (node.bridge && node.bridge.registered) {
