@@ -38,11 +38,22 @@ module.exports = function(RED) {
 
         // Dynamic event subscription
         node.subscribeToEvents = function() {
-            if (!node.device || !node.device.events) return;
+            if (!node.device || !node.device.events) {
+                node.error("Device or device.events not available");
+                return;
+            }
             
-            // Subscribe to all $Changed events
+            node.log(`Subscribing to events for device type: ${deviceConfig.deviceType}`);
+            
+            
+            // Subscribe to all $Changed events dynamically
+            node.log("BEFORE FOREACH");
+            node.log(`Clusters available: ${Object.keys(node.device.events).join(', ')}`);
+            
             Object.keys(node.device.events).forEach(clusterName => {
+                node.log(`INSIDE FOREACH: ${clusterName}`);
                 if (clusterName === 'identify') {
+                    node.log("Skipping identify cluster");
                     // Handle identify separately
                     if (node.device.events.identify.startIdentifying) {
                         node.device.events.identify.startIdentifying.on(() => {
@@ -57,19 +68,55 @@ module.exports = function(RED) {
                     return;
                 }
                 
-                Object.keys(node.device.events[clusterName]).forEach(eventName => {
-                    if (eventName.endsWith('$Changed')) {
-                        const attributeName = eventName.replace('$Changed', '');
-                        node.device.events[clusterName][eventName].on((value, oldValue, context) => {
-                            const msg = {
-                                payload: {}
-                            };
-                            msg.payload[clusterName] = {};
-                            msg.payload[clusterName][attributeName] = value;
-                            node.send(msg);
-                        });
-                    }
-                });
+                const clusterEvents = node.device.events[clusterName];
+                if (!clusterEvents) {
+                    return;
+                }
+                
+                node.log(`Checking events in cluster: ${clusterName}`);
+                
+                // Try different methods to get all properties
+                const eventNames = Object.keys(clusterEvents);
+                const propNames = Object.getOwnPropertyNames(clusterEvents);
+                const allNames = [...new Set([...eventNames, ...propNames])];
+                
+                node.log(`Object.keys in ${clusterName}: ${eventNames.join(', ')}`);
+                node.log(`getOwnPropertyNames in ${clusterName}: ${propNames.join(', ')}`);
+                node.log(`All properties in ${clusterName}: ${allNames.join(', ')}`);
+                
+                // Subscribe based on state attributes
+                if (node.device.state && node.device.state[clusterName]) {
+                    Object.keys(node.device.state[clusterName]).forEach(attributeName => {
+                        const eventName = `${attributeName}$Changed`;
+                        if (clusterEvents[eventName]) {
+                            node.log(`Found ${clusterName}.${eventName}, subscribing...`);
+                            try {
+                                clusterEvents[eventName].on((value, oldValue, context) => {
+                                    const msg = {
+                                        payload: {}
+                                    };
+                                    msg.payload[clusterName] = {};
+                                    msg.payload[clusterName][attributeName] = value;
+                                    
+                                    if (context) {
+                                        msg.eventSource = {
+                                            local: context.offline || false
+                                        };
+                                        if (context.exchange && context.exchange.channel) {
+                                            msg.eventSource.srcAddress = context.exchange.channel.channel.peerAddress;
+                                            msg.eventSource.srcPort = context.exchange.channel.channel.peerPort;
+                                        }
+                                    }
+                                    
+                                    node.send(msg);
+                                });
+                                node.log(`Subscribed to ${clusterName}.${eventName}`);
+                            } catch (err) {
+                                node.error(`Failed to subscribe: ${err.message}`);
+                            }
+                        }
+                    });
+                }
             });
         };
 
@@ -108,11 +155,34 @@ module.exports = function(RED) {
 
         this.on('serverReady', function() {
             var node = this;
+            node.log("Server ready event received");
+            
+            // Check device state immediately
+            if (!node.device) {
+                node.error("Device not available on serverReady");
+                return;
+            }
+            
+            node.log(`Device state available: ${!!node.device.state}`);
+            node.log(`Device events available: ${!!node.device.events}`);
+            
+            // Log device structure for debugging
+            if (node.device.state) {
+                node.log(`Device state structure: ${JSON.stringify(Object.keys(node.device.state))}`);
+            }
+            if (node.device.events) {
+                Object.keys(node.device.events).forEach(cluster => {
+                    const eventNames = Object.keys(node.device.events[cluster]);
+                    node.log(`Events in ${cluster}: ${eventNames.join(', ')}`);
+                });
+            }
+            
             // NEED delay for Matter.js device initialization
             setTimeout(() => {
+                node.log("Starting event subscription after delay");
                 node.subscribeToEvents();
+                node.status({fill:"green", shape:"dot", text:"ready"});
             }, 2000);
-            node.status({fill:"green", shape:"dot", text:"ready"});
         });
 
         this.on('close', async function(removed, done) {

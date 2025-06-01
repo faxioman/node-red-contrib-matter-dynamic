@@ -139,6 +139,12 @@ module.exports = function(RED) {
         node.registerChild = function(child) {
             node.log(`Registering device ${child.id}`);
             
+            // Check if already registered
+            if (node.registered.find(c => c.id === child.id)) {
+                node.warn(`Device ${child.id} already registered, skipping`);
+                return;
+            }
+            
             // Remove from pending users
             const index = node.users.indexOf(child.id);
             if (index > -1) {

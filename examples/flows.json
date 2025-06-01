@@ -80,7 +80,7 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"temperatureMeasurement\":{\"measuredValue\":1550}}",
+        "payload": "{\"temperatureMeasurement\":{\"measuredValue\":1050}}",
         "payloadType": "json",
         "x": 110,
         "y": 240,
