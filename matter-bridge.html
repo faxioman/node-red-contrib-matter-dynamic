@@ -1,0 +1,155 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matter-dynamic-bridge', {
+        category: 'config',
+        defaults: {
+            name: {value: "Matter Bridge"},
+            vendorId: {value: "65521", required: true, validate: RED.validators.number()},
+            productId: {value: "32768", required: true, validate: RED.validators.number()},
+            vendorName: {value: "Node-RED"},
+            productName: {value: "Dynamic Matter Bridge"},
+            networkInterface: {value: ""},
+            storageLocation: {value: ""},
+            port: {value: "5540", validate: RED.validators.number()},
+            logLevel: {value: "INFO"}
+        },
+        label: function() {
+            return this.name || "Matter Bridge";
+        },
+        oneditprepare: function() {
+            var node = this;
+            
+            // Load network interfaces
+            $.getJSON('_matterbridge/interfaces', function(data) {
+                $("#node-config-input-networkInterface").empty();
+                $("#node-config-input-networkInterface").append('<option value="">Default</option>');
+                data.forEach(function(iface) {
+                    $("#node-config-input-networkInterface").append('<option value="' + iface + '">' + iface + '</option>');
+                });
+                $("#node-config-input-networkInterface").val($("#node-config-input-networkInterface").data('current'));
+            });
+            
+            // Store current value
+            $("#node-config-input-networkInterface").data('current', this.networkInterface);
+            
+            // Load QR code if node exists
+            if (node.id) {
+                $.getJSON('_matterbridge/commissioning/' + node.id, function(data) {
+                    if (data.state === 'ready') {
+                        $("#matter-qr-code").text(data.qrPairingCode);
+                        $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
+                        $("#matter-reopen-btn").hide();
+                        $("#matter-qr-container").show();
+                    } else if (data.state === 'commissioned') {
+                        $("#matter-qr-code").text("Device already commissioned");
+                        $("#matter-manual-code").text("");
+                        $("#matter-reopen-btn").show();
+                        $("#matter-qr-container").show();
+                    }
+                }).fail(function() {
+                    $("#matter-qr-container").hide();
+                });
+                
+                // Reopen commissioning button
+                $("#matter-reopen-btn").click(function() {
+                    $.getJSON('_matterbridge/reopen/' + node.id, function(data) {
+                        if (data.state === 'ready') {
+                            $("#matter-qr-code").text(data.qrPairingCode);
+                            $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
+                            $("#matter-reopen-btn").hide();
+                        }
+                    });
+                });
+            }
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="matter-dynamic-bridge">
+    <div id="matter-qr-container" style="text-align: center; padding: 10px; display: none;">
+        <h3>Matter Pairing Code</h3>
+        <div id="matter-qr-code" style="font-family: monospace; white-space: pre; font-size: 8px; line-height: 1;"></div>
+        <div id="matter-manual-code" style="margin-top: 10px; font-size: 16px; font-weight: bold;"></div>
+        <button id="matter-reopen-btn" class="red-ui-button" style="margin-top: 10px; display: none;">Reopen Commissioning</button>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Matter Bridge">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-vendorId"><i class="fa fa-building"></i> Vendor ID</label>
+        <input type="text" id="node-config-input-vendorId" placeholder="65521">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-productId"><i class="fa fa-barcode"></i> Product ID</label>
+        <input type="text" id="node-config-input-productId" placeholder="32768">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-vendorName"><i class="fa fa-building-o"></i> Vendor Name</label>
+        <input type="text" id="node-config-input-vendorName" placeholder="Node-RED">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-productName"><i class="fa fa-cube"></i> Product Name</label>
+        <input type="text" id="node-config-input-productName" placeholder="Dynamic Matter Bridge">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-networkInterface"><i class="fa fa-sitemap"></i> Network Interface</label>
+        <select id="node-config-input-networkInterface" style="width:70%;">
+            <option value="">Default</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-storageLocation"><i class="fa fa-folder"></i> Storage Location</label>
+        <input type="text" id="node-config-input-storageLocation" placeholder="Leave empty for default">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-port"><i class="fa fa-plug"></i> Port</label>
+        <input type="text" id="node-config-input-port" placeholder="5540">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-config-input-logLevel"><i class="fa fa-file-text"></i> Log Level</label>
+        <select id="node-config-input-logLevel" style="width:70%;">
+            <option value="FATAL">Fatal</option>
+            <option value="ERROR">Error</option>
+            <option value="WARN">Warning</option>
+            <option value="INFO" selected>Info</option>
+            <option value="DEBUG">Debug</option>
+        </select>
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="matter-dynamic-bridge">
+    <p>Matter Bridge configuration node for dynamic Matter devices.</p>
+    
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Name <span class="property-type">string</span></dt>
+        <dd>Display name for the bridge</dd>
+        
+        <dt>Vendor ID <span class="property-type">number</span></dt>
+        <dd>Vendor ID (default: 65521 for testing)</dd>
+        
+        <dt>Product ID <span class="property-type">number</span></dt>
+        <dd>Product ID (default: 32768)</dd>
+        
+        <dt>Network Interface <span class="property-type">string</span></dt>
+        <dd>Network interface to use for Matter communication</dd>
+        
+        <dt>Storage Location <span class="property-type">string</span></dt>
+        <dd>Custom storage location for Matter data</dd>
+        
+        <dt>Port <span class="property-type">number</span></dt>
+        <dd>Port number for Matter server (default: 5540)</dd>
+    </dl>
+    
+    <h3>Details</h3>
+    <p>This node creates a Matter bridge that can host multiple dynamic Matter devices.</p>
+</script>

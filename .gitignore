@@ -1,0 +1,15 @@
+# Logs
+logs
+*.log
+
+# Dependency directories
+node_modules/
+
+# Output of 'npm pack'
+*.tgz
+
+/examples/.config.nodes.json
+/examples/.config.runtime.json
+
+# Other
+*.backup

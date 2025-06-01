@@ -1,0 +1,172 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matter-dynamic-device', {
+        category: 'Matter',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value: ""},
+            bridge: {type: "matter-dynamic-bridge", required: true},
+            passthrough: {value: false},
+            deviceConfig: {value: "{\n  \"deviceType\": \"OnOffLightDevice\"\n}", validate: function(v) {
+                try {
+                    JSON.parse(v);
+                    return true;
+                } catch(e) {
+                    return false;
+                }
+            }}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "bridge.png",
+        label: function() {
+            return this.name || "Dynamic Matter Device";
+        },
+        oneditprepare: function() {
+            // Create JSON editor
+            this.configEditor = RED.editor.createEditor({
+                id: 'node-input-deviceConfig-editor',
+                mode: 'ace/mode/json',
+                value: this.deviceConfig
+            });
+            
+            // Example configurations
+            const examples = {
+                "OnOffLight": {
+                    "deviceType": "OnOffLightDevice"
+                },
+                "DimmableLight": {
+                    "deviceType": "DimmableLightDevice"
+                },
+                "ColorTemperatureLight": {
+                    "deviceType": "ColorTemperatureLightDevice",
+                    "additionalBehaviors": ["ColorControlServer"],
+                    "initialState": {
+                        "colorControl": {
+                            "colorMode": 2
+                        }
+                    }
+                },
+                "ContactSensor": {
+                    "deviceType": "ContactSensorDevice"
+                },
+                "TemperatureSensor": {
+                    "deviceType": "TemperatureSensorDevice"
+                },
+                "GenericSwitch": {
+                    "deviceType": "GenericSwitchDevice"
+                },
+                "WindowCovering": {
+                    "deviceType": "WindowCoveringDevice"
+                },
+                "Thermostat": {
+                    "deviceType": "ThermostatDevice",
+                    "initialState": {
+                        "thermostat": {
+                            "systemMode": 0,
+                            "controlSequenceOfOperation": 0
+                        }
+                    }
+                }
+            };
+            
+            // Populate examples dropdown
+            $("#node-input-example").empty();
+            $("#node-input-example").append('<option value="">Select example...</option>');
+            Object.keys(examples).forEach(function(key) {
+                $("#node-input-example").append('<option value="' + key + '">' + key + '</option>');
+            });
+            
+            // Handle example selection
+            $("#node-input-example").change(function() {
+                var selected = $(this).val();
+                if (selected && examples[selected]) {
+                    var exampleConfig = JSON.stringify(examples[selected], null, 2);
+                    RED.nodes.node($("#node-input-deviceConfig-editor").data("node-id")).configEditor.setValue(exampleConfig);
+                }
+            });
+        },
+        oneditsave: function() {
+            this.deviceConfig = this.configEditor.getValue();
+            this.configEditor.destroy();
+            delete this.configEditor;
+        },
+        oneditcancel: function() {
+            this.configEditor.destroy();
+            delete this.configEditor;
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="matter-dynamic-device">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-bridge"><i class="fa fa-server"></i> Bridge</label>
+        <input type="text" id="node-input-bridge">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-passthrough"><i class="fa fa-arrow-right"></i> Pass Through</label>
+        <input type="checkbox" id="node-input-passthrough" style="display: inline-block; width: auto; vertical-align: top;">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-example"><i class="fa fa-list"></i> Examples</label>
+        <select id="node-input-example" style="width:70%;">
+            <option value="">Select example...</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-deviceConfig"><i class="fa fa-code"></i> Config</label>
+        <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-deviceConfig-editor"></div>
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="matter-dynamic-device">
+    <p>Dynamic Matter device node that can be configured via JSON.</p>
+    
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>deviceType <span class="property-type">string</span></dt>
+        <dd>The Matter device type (e.g., "OnOffLightDevice", "ThermostatDevice")</dd>
+    </dl>
+    
+    <h3>Inputs</h3>
+    <p>The payload must match Matter.js cluster structure exactly:</p>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>Device state in Matter format. Examples:
+            <ul>
+                <li>OnOff Light: <code>{onOff: {onOff: true}}</code></li>
+                <li>Temperature: <code>{temperatureMeasurement: {measuredValue: 2000}}</code> (20°C * 100)</li>
+                <li>Thermostat: <code>{thermostat: {occupiedHeatingSetpoint: 2100}}</code></li>
+            </ul>
+        </dd>
+        
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd>Set to "state" to query current device state</dd>
+    </dl>
+    
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>State changes in same format as input</dd>
+        
+        <dt>oldValue <span class="property-type">object</span></dt>
+        <dd>Previous value (if available)</dd>
+    </dl>
+    
+    <h3>Examples</h3>
+    <p><b>Turn on a light:</b><br>
+    <code>msg.payload = {onOff: {onOff: true}}</code></p>
+    
+    <p><b>Set temperature sensor:</b><br>
+    <code>msg.payload = {temperatureMeasurement: {measuredValue: 2150}}</code> // 21.5°C</p>
+    
+    <p><b>Query device state:</b><br>
+    <code>msg.topic = "state"</code></p>
+</script>

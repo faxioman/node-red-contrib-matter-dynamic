@@ -1,0 +1,93 @@
+[
+    {
+        "id": "matter-test-flow",
+        "type": "tab",
+        "label": "Matter Dynamic Test"
+    },
+    {
+        "id": "519d6f7c6aac4b9d",
+        "type": "matter-dynamic-bridge",
+        "name": "Matter Bridge",
+        "vendorId": "65521",
+        "productId": "32768",
+        "vendorName": "Node-RED",
+        "productName": "Dynamic Matter Bridge",
+        "networkInterface": "",
+        "storageLocation": "",
+        "port": "5540",
+        "logLevel": "INFO"
+    },
+    {
+        "id": "dynamic-light",
+        "type": "matter-dynamic-device",
+        "z": "matter-test-flow",
+        "name": "Dynamic Light",
+        "bridge": "519d6f7c6aac4b9d",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
+        "x": 340,
+        "y": 180,
+        "wires": [
+            [
+                "670b57bca2452c96"
+            ]
+        ]
+    },
+    {
+        "id": "dynamic-sensor",
+        "type": "matter-dynamic-device",
+        "z": "matter-test-flow",
+        "name": "Dynamic Temperature",
+        "bridge": "519d6f7c6aac4b9d",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
+        "x": 360,
+        "y": 240,
+        "wires": [
+            [
+                "670b57bca2452c96"
+            ]
+        ]
+    },
+    {
+        "id": "670b57bca2452c96",
+        "type": "debug",
+        "z": "matter-test-flow",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "c17a50605965b6db",
+        "type": "inject",
+        "z": "matter-test-flow",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"temperatureMeasurement\":{\"measuredValue\":1550}}",
+        "payloadType": "json",
+        "x": 110,
+        "y": 240,
+        "wires": [
+            [
+                "dynamic-sensor"
+            ]
+        ]
+    }
+]

@@ -1,0 +1,23 @@
+[
+    {
+        "id": "test-tab",
+        "type": "tab",
+        "label": "Debug Test"
+    },
+    {
+        "id": "test-bridge",
+        "type": "matter-dynamic-bridge",
+        "name": "Debug Bridge"
+    },
+    {
+        "id": "test-device",
+        "type": "matter-dynamic-device",
+        "z": "test-tab",
+        "name": "Debug Device",
+        "bridge": "test-bridge",
+        "deviceConfig": "{\"deviceType\": \"OnOffLightDevice\"}",
+        "x": 200,
+        "y": 100,
+        "wires": [[]]
+    }
+]
