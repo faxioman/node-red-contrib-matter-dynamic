@@ -5,9 +5,9 @@
         "label": "Matter Dynamic Test"
     },
     {
-        "id": "519d6f7c6aac4b9d",
+        "id": "e6ecd37a93e8b9e8",
         "type": "matter-dynamic-bridge",
-        "name": "Matter Bridge",
+        "name": "Another Bridge",
         "vendorId": "65521",
         "productId": "32768",
         "vendorName": "Node-RED",
@@ -16,38 +16,6 @@
         "storageLocation": "",
         "port": "5540",
         "logLevel": "INFO"
-    },
-    {
-        "id": "dynamic-light",
-        "type": "matter-dynamic-device",
-        "z": "matter-test-flow",
-        "name": "Dynamic Light",
-        "bridge": "519d6f7c6aac4b9d",
-        "passthrough": false,
-        "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
-        "x": 340,
-        "y": 180,
-        "wires": [
-            [
-                "670b57bca2452c96"
-            ]
-        ]
-    },
-    {
-        "id": "dynamic-sensor",
-        "type": "matter-dynamic-device",
-        "z": "matter-test-flow",
-        "name": "Dynamic Temperature",
-        "bridge": "519d6f7c6aac4b9d",
-        "passthrough": false,
-        "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
-        "x": 360,
-        "y": 240,
-        "wires": [
-            [
-                "670b57bca2452c96"
-            ]
-        ]
     },
     {
         "id": "670b57bca2452c96",
@@ -86,25 +54,21 @@
         "x": 110,
         "y": 240,
         "wires": [
-            [
-                "dynamic-sensor"
-            ]
+            []
         ]
     },
     {
-        "id": "5b0d05de45f157e2",
-        "type": "matter-dynamic-device",
+        "id": "c1bec938dcb1936f",
+        "type": "matter-device",
         "z": "matter-test-flow",
-        "name": "Fan",
-        "bridge": "519d6f7c6aac4b9d",
+        "name": "luce",
+        "bridge": "e6ecd37a93e8b9e8",
         "passthrough": false,
-        "deviceConfig": "{\n  \"deviceType\": \"FanDevice\",\n  \"initialState\": {\n    \"fanControl\": {\n      \"fanModeSequence\": 0,\n      \"percentCurrent\": 0\n    }\n  }\n}",
-        "x": 310,
-        "y": 300,
+        "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
+        "x": 210,
+        "y": 420,
         "wires": [
-            [
-                "670b57bca2452c96"
-            ]
+            []
         ]
     }
 ]

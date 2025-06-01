@@ -14,7 +14,7 @@ This project implements dynamic Matter device nodes for Node-RED, allowing users
   - Provides HTTP endpoints for commissioning QR codes
   - Auto-starts when all registered devices are ready
 
-### 2. Dynamic Device (`dynamic-device.js` / `dynamic-device.html`)
+### 2. Matter Device (`matter-device.js` / `matter-device.html`)
 - **Purpose**: Generic node that can represent any Matter device type
 - **Configuration**: Simple JSON specifying only `deviceType` (e.g., "OnOffLightDevice")
 - **Key Features**:

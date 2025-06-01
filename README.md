@@ -35,7 +35,7 @@ npm install node-red-contrib-matter-dynamic
 
 ### 2. Add Dynamic Devices
 
-1. Drag a **Matter Dynamic Device** node
+1. Drag a **Matter Device** node
 2. Configure:
    - **Name**: Device name
    - **Bridge**: Select your bridge
@@ -219,7 +219,7 @@ msg.oldValue = {
   },
   {
     "id": "light1",
-    "type": "matter-dynamic-device",
+    "type": "matter-device",
     "name": "Living Room Light",
     "bridge": "bridge1",
     "deviceConfig": "{\"deviceType\": \"OnOffLightDevice\"}",

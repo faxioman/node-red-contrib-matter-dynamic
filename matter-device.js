@@ -11,12 +11,12 @@ class DynamicIdentifyServer extends IdentifyServer {
 }
 
 module.exports = function(RED) {
-    function MatterDynamicDevice(config) {
+    function MatterDevice(config) {
         RED.nodes.createNode(this, config);
         var node = this;
         node.bridge = RED.nodes.getNode(config.bridge);
         node.name = config.name;
-        node.type = 'matter-dynamic-device';
+        node.type = 'matter-device';
 
         // Parse device configuration
         let deviceConfig;
@@ -347,5 +347,5 @@ module.exports = function(RED) {
         }
     }
 
-    RED.nodes.registerType("matter-dynamic-device", MatterDynamicDevice);
+    RED.nodes.registerType("matter-device", MatterDevice);
 };
