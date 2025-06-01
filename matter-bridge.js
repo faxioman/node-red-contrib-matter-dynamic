@@ -1,9 +1,10 @@
 const { Endpoint, Environment, ServerNode, Logger, VendorId, StorageService } = require("@matter/main");
 const { AggregatorEndpoint } = require("@matter/main/endpoints");
-const { DeviceCommisioner } = require("@matter/main/protocol");
+const { AdministratorCommissioning } = require("@matter/main/behaviors");
 const { NetworkCommissioning } = require("@matter/main/clusters");
 const { NetworkCommissioningServer } = require("@matter/main/behaviors");
 const os = require('os');
+const QRCode = require('qrcode');
 
 function genPasscode() {
     let x = Math.floor(Math.random() * (99999998 - 1) + 1);
@@ -179,6 +180,26 @@ module.exports = function(RED) {
                 node.log('Starting Matter server...');
                 node.matterServer.start().then(() => {
                     node.log('Matter server started');
+                    
+                    // Update node status with QR code
+                    if (!node.matterServer.lifecycle.isCommissioned) {
+                        const pairingData = node.matterServer.state.commissioning.pairingCodes;
+                        node.status({
+                            fill: "blue",
+                            shape: "dot",
+                            text: `QR: ${pairingData.manualPairingCode}`
+                        });
+                        // Store QR data for display
+                        node.qrCode = pairingData.qrPairingCode;
+                        node.manualCode = pairingData.manualPairingCode;
+                    } else {
+                        node.status({
+                            fill: "green",
+                            shape: "dot",
+                            text: "commissioned"
+                        });
+                    }
+                    
                     // Delay to ensure all device initialization errors are caught
                     setTimeout(() => {
                         node.registered.forEach(child => {
@@ -298,17 +319,90 @@ module.exports = function(RED) {
     
     RED.nodes.registerType("matter-dynamic-bridge", MatterDynamicBridge);
     
+    // Endpoint to get QR code for display in flow
+    RED.httpAdmin.get('/_matterbridge/qrcode/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
+        let targetNode = RED.nodes.getNode(req.params.id);
+        if (targetNode && targetNode.qrCode) {
+            try {
+                const qrSvg = await QRCode.toString(targetNode.qrCode, {
+                    type: 'svg',
+                    width: 200,
+                    margin: 1
+                });
+                res.json({
+                    qrCode: targetNode.qrCode,
+                    qrSvg: qrSvg,
+                    manualCode: targetNode.manualCode,
+                    commissioned: targetNode.matterServer?.lifecycle?.isCommissioned || false
+                });
+            } catch (err) {
+                res.json({
+                    qrCode: targetNode.qrCode,
+                    manualCode: targetNode.manualCode,
+                    commissioned: targetNode.matterServer?.lifecycle?.isCommissioned || false
+                });
+            }
+        } else if (targetNode && targetNode.matterServer) {
+            // Try to get from server state
+            if (!targetNode.matterServer.lifecycle.isCommissioned) {
+                const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
+                try {
+                    const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
+                        type: 'svg',
+                        width: 200,
+                        margin: 1
+                    });
+                    res.json({
+                        qrCode: pairingData.qrPairingCode,
+                        qrSvg: qrSvg,
+                        manualCode: pairingData.manualPairingCode,
+                        commissioned: false
+                    });
+                } catch (err) {
+                    res.json({
+                        qrCode: pairingData.qrPairingCode,
+                        manualCode: pairingData.manualPairingCode,
+                        commissioned: false
+                    });
+                }
+            } else {
+                res.json({
+                    commissioned: true
+                });
+            }
+        } else {
+            res.json({ error: "Bridge not ready" });
+        }
+    });
+    
     // HTTP endpoints for commissioning
-    RED.httpAdmin.get('/_matterbridge/commissioning/:id', RED.auth.needsPermission('admin.write'), function(req, res) {
+    RED.httpAdmin.get('/_matterbridge/commissioning/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
         let targetNode = RED.nodes.getNode(req.params.id);
         if (targetNode && targetNode.matterServer) {
             if (!targetNode.matterServer.lifecycle.isCommissioned) {
                 const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                res.json({
-                    state: 'ready',
-                    qrPairingCode: pairingData.qrPairingCode,
-                    manualPairingCode: pairingData.manualPairingCode
-                });
+                
+                // Generate QR code SVG
+                try {
+                    const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
+                        type: 'svg',
+                        width: 200,
+                        margin: 1
+                    });
+                    
+                    res.json({
+                        state: 'ready',
+                        qrPairingCode: pairingData.qrPairingCode,
+                        qrSvg: qrSvg,
+                        manualPairingCode: pairingData.manualPairingCode
+                    });
+                } catch (err) {
+                    res.json({
+                        state: 'ready',
+                        qrPairingCode: pairingData.qrPairingCode,
+                        manualPairingCode: pairingData.manualPairingCode
+                    });
+                }
             } else {
                 res.json({ state: 'commissioned' });
             }
@@ -317,18 +411,55 @@ module.exports = function(RED) {
         }
     });
     
-    RED.httpAdmin.get('/_matterbridge/reopen/:id', RED.auth.needsPermission('admin.write'), function(req, res) {
+    RED.httpAdmin.get('/_matterbridge/reopen/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
         let targetNode = RED.nodes.getNode(req.params.id);
         if (targetNode && targetNode.matterServer) {
-            let commisioner = targetNode.matterServer.env.get(DeviceCommisioner);
-            commisioner.allowBasicCommissioning().then(() => {
-                const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                res.json({
-                    state: 'ready',
-                    qrPairingCode: pairingData.qrPairingCode,
-                    manualPairingCode: pairingData.manualPairingCode
-                });
-            });
+            try {
+                // Access the AdministratorCommissioning behavior
+                const endpoint = targetNode.matterServer;
+                const adminBehavior = endpoint.behaviors?.administratorCommissioning;
+                
+                if (adminBehavior && adminBehavior.openCommissioningWindow) {
+                    // Call openCommissioningWindow command
+                    await adminBehavior.openCommissioningWindow({
+                        commissioningTimeout: 900, // 15 minutes
+                        discriminator: targetNode.discriminator
+                    });
+                    
+                    const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
+                    res.json({
+                        state: 'ready',
+                        qrPairingCode: pairingData.qrPairingCode,
+                        manualPairingCode: pairingData.manualPairingCode
+                    });
+                } else {
+                    // Fallback: mark as uncommissioned to allow new pairing
+                    targetNode.matterServer.lifecycle.commissioned = false;
+                    const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
+                    
+                    try {
+                        const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
+                            type: 'svg',
+                            width: 200,
+                            margin: 1
+                        });
+                        res.json({
+                            state: 'ready',
+                            qrPairingCode: pairingData.qrPairingCode,
+                            qrSvg: qrSvg,
+                            manualPairingCode: pairingData.manualPairingCode
+                        });
+                    } catch (err) {
+                        res.json({
+                            state: 'ready',
+                            qrPairingCode: pairingData.qrPairingCode,
+                            manualPairingCode: pairingData.manualPairingCode
+                        });
+                    }
+                }
+            } catch (err) {
+                res.status(500).json({ error: err.message });
+            }
         } else {
             res.sendStatus(404);
         }

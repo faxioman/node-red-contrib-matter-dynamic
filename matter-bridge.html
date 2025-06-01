@@ -1,3 +1,29 @@
+<style>
+    .matter-qr-tooltip {
+        position: absolute;
+        background: white;
+        border: 1px solid #999;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        z-index: 1000;
+        display: none;
+        text-align: center;
+        max-width: 400px;
+    }
+    .matter-qr-tooltip pre {
+        font-family: monospace;
+        font-size: 6px;
+        line-height: 1;
+        margin: 5px 0;
+    }
+    .matter-qr-tooltip .manual-code {
+        font-size: 14px;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+</style>
+
 <script type="text/javascript">
     RED.nodes.registerType('matter-dynamic-bridge', {
         category: 'config',
@@ -15,8 +41,78 @@
         label: function() {
             return this.name || "Matter Bridge";
         },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : "";
+        },
+        info: function() {
+            // Show QR code in node info panel
+            var info = "<p>Matter Bridge for dynamic devices.</p>";
+            
+            if (this.id) {
+                info += '<div id="bridge-info-qr-' + this.id + '"></div>';
+                
+                // Load QR code async
+                setTimeout(() => {
+                    $.getJSON('_matterbridge/qrcode/' + node.id, function(data) {
+                        if (data.qrCode && !data.commissioned) {
+                            var html = '<h3>Matter Pairing Code</h3>';
+                            if (data.qrSvg) {
+                                html += '<div style="text-align: center;">' + data.qrSvg + '</div>';
+                            } else {
+                                html += '<pre style="font-family: monospace; font-size: 6px; line-height: 1;">' + data.qrCode + '</pre>';
+                            }
+                            html += '<p><b>Manual Code: ' + data.manualCode + '</b></p>';
+                            $('#bridge-info-qr-' + node.id).html(html);
+                        } else if (data.commissioned) {
+                            $('#bridge-info-qr-' + node.id).html('<p><i>Bridge is commissioned</i></p>');
+                        }
+                    });
+                }, 100);
+            }
+            
+            return info;
+        },
         oneditprepare: function() {
             var node = this;
+            
+            // Create QR tooltip element
+            if (!$('#matter-qr-tooltip').length) {
+                $('body').append('<div id="matter-qr-tooltip" class="matter-qr-tooltip"></div>');
+            }
+            
+            // Setup QR display on hover
+            var configNodes = $(".red-ui-palette-node-config-list .red-ui-palette-node");
+            configNodes.each(function() {
+                var configNode = $(this);
+                if (configNode.data('node-id') === node.id) {
+                    configNode.hover(
+                        function(e) {
+                            // Mouse enter - show QR code
+                            $.getJSON('_matterbridge/qrcode/' + node.id, function(data) {
+                                if (data.qrCode && !data.commissioned) {
+                                    var tooltip = $('#matter-qr-tooltip');
+                                    var html = '<h4>Matter QR Code</h4>';
+                                    if (data.qrSvg) {
+                                        html += data.qrSvg;
+                                    } else {
+                                        html += '<pre>' + data.qrCode + '</pre>';
+                                    }
+                                    html += '<div class="manual-code">Code: ' + data.manualCode + '</div>';
+                                    tooltip.html(html);
+                                    tooltip.css({
+                                        left: e.pageX + 20,
+                                        top: e.pageY - 100
+                                    }).show();
+                                }
+                            });
+                        },
+                        function() {
+                            // Mouse leave - hide QR code
+                            $('#matter-qr-tooltip').hide();
+                        }
+                    );
+                }
+            });
             
             // Load network interfaces
             $.getJSON('_matterbridge/interfaces', function(data) {
@@ -35,7 +131,11 @@
             if (node.id) {
                 $.getJSON('_matterbridge/commissioning/' + node.id, function(data) {
                     if (data.state === 'ready') {
-                        $("#matter-qr-code").text(data.qrPairingCode);
+                        if (data.qrSvg) {
+                            $("#matter-qr-code").html(data.qrSvg);
+                        } else {
+                            $("#matter-qr-code").text(data.qrPairingCode);
+                        }
                         $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
                         $("#matter-reopen-btn").hide();
                         $("#matter-qr-container").show();
@@ -53,7 +153,11 @@
                 $("#matter-reopen-btn").click(function() {
                     $.getJSON('_matterbridge/reopen/' + node.id, function(data) {
                         if (data.state === 'ready') {
-                            $("#matter-qr-code").text(data.qrPairingCode);
+                            if (data.qrSvg) {
+                                $("#matter-qr-code").html(data.qrSvg);
+                            } else {
+                                $("#matter-qr-code").text(data.qrPairingCode);
+                            }
                             $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
                             $("#matter-reopen-btn").hide();
                         }
@@ -67,7 +171,7 @@
 <script type="text/x-red" data-template-name="matter-dynamic-bridge">
     <div id="matter-qr-container" style="text-align: center; padding: 10px; display: none;">
         <h3>Matter Pairing Code</h3>
-        <div id="matter-qr-code" style="font-family: monospace; white-space: pre; font-size: 8px; line-height: 1;"></div>
+        <div id="matter-qr-code" style="text-align: center; margin: 10px 0;"></div>
         <div id="matter-manual-code" style="margin-top: 10px; font-size: 16px; font-weight: bold;"></div>
         <button id="matter-reopen-btn" class="red-ui-button" style="margin-top: 10px; display: none;">Reopen Commissioning</button>
     </div>

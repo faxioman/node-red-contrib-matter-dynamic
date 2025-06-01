@@ -16,7 +16,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@matter/main": "^0.13.0"
+    "@matter/main": "^0.13.0",
+    "qrcode": "^1.5.4"
   },
   "engines": {
     "node": ">=18.0.0"
