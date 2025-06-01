@@ -155,10 +155,26 @@ Matter.js events ending with `$Changed` are not enumerable properties. The solut
 - Proper cleanup prevents memory leaks
 - 2-second delay after `serverReady` ensures Matter.js initialization
 
+### ✅ Issue 3: Matter.js Validation Errors Crash Node-RED (RESOLVED)
+- **Symptom**: Node-RED crashes when creating devices with missing mandatory attributes
+- **Root Cause**: Unhandled Promise rejection from Matter.js validation
+- **Solution**: Added unhandled rejection handler in bridge to catch Matter.js errors
+```javascript
+process.on('unhandledRejection', (reason, promise) => {
+    if (reason && reason.message && reason.message.includes('Behaviors have errors')) {
+        // Handle gracefully, mark device as failed
+        // Prevent Node-RED crash
+    }
+});
+```
+
 ## Next Steps
 
 1. **Add More Examples**: Create comprehensive examples for all device types
 2. **Error Handling**: Better error messages for invalid configurations
+   - **Future Enhancement**: Parse Matter.js validation warnings to show specific missing attributes
+   - Example: Extract `fanModeSequence`, `percentCurrent` from validation logs
+   - Goal: Show user-friendly list of missing mandatory attributes
 3. **Documentation**: Expand user documentation with more device examples
 4. **Testing**: Add automated tests for various device types
 
