@@ -47,6 +47,28 @@ This project implements dynamic Matter device nodes for Node-RED, allowing users
 
 ## Current Issues & Solutions
 
+### ✅ Issue 4: Video Player Commands Not Implemented (RESOLVED)
+- **Symptom**: Matter.js logs "Throws unimplemented exception" for play/pause/stop/sendKey
+- **Root Cause**: Behaviors with commands require method implementations
+- **Solution**: Dynamically patch ALL behavior prototypes at module load time:
+  - Iterate through all behaviors that have cluster.commands
+  - Add command method implementations before devices are loaded
+  - Each method sends command to Node-RED and returns appropriate response
+```javascript
+// Patch behaviors before loading devices
+Object.values(matterBehaviors).forEach(BehaviorClass => {
+    if (BehaviorClass?.cluster?.commands) {
+        Object.entries(BehaviorClass.cluster.commands).forEach(([cmd, def]) => {
+            BehaviorClass.prototype[cmd] = async function(request) {
+                // Send to Node-RED
+                // Return success
+            };
+        });
+    }
+});
+```
+- **Note**: Video player devices are part of Matter 1.4 spec but may not be supported by all controllers yet.
+
 ### ✅ Issue 1: Events Not Firing (RESOLVED)
 - **Symptom**: Matter.js logs showed commands but Node-RED didn't emit messages
 - **Root Cause**: Event properties ending with `$Changed` are not enumerable in Matter.js
@@ -168,6 +190,40 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 ```
 
+## Command Handling Architecture
+
+### Dynamic Command Interception
+The system dynamically intercepts ALL commands for ANY device type without hardcoding:
+1. At module load time, patches all behavior prototypes that have commands
+2. Each command method sends message to Node-RED when invoked
+3. Returns appropriate Matter response based on command schema
+4. Works for all current and future device types
+
+### Two-Output System
+Device nodes have two outputs for different message types:
+- **Output 1**: State change events (when attributes change)
+- **Output 2**: Commands received from Matter controllers
+
+This separation allows:
+- Backward compatibility with existing flows using events
+- Clear distinction between state changes and commands
+- Easy routing of different message types
+
+Example messages:
+```javascript
+// Output 1 - Event
+{ onOff: { onOff: true } }
+
+// Output 2 - Command  
+{ command: "on", cluster: "OnOff", data: undefined }
+```
+
+### Controller Support Status
+- **Fully Supported**: Lights, Switches, Sensors, Thermostats, Locks
+- **Limited Support**: 
+  - Video Players (Matter 1.4) - Not recognized by HomeKit/Tuya yet
+  - Advanced features may require specific controller support
+
 ## Next Steps
 
 1. **Add More Examples**: Create comprehensive examples for all device types
@@ -177,6 +233,7 @@ process.on('unhandledRejection', (reason, promise) => {
    - Goal: Show user-friendly list of missing mandatory attributes
 3. **Documentation**: Expand user documentation with more device examples
 4. **Testing**: Add automated tests for various device types
+5. **Generic Command Handler**: Extend dynamic command handling to all clusters with commands
 
 ## Dependencies
 

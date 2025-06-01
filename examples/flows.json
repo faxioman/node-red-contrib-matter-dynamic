@@ -5,9 +5,9 @@
         "label": "Matter Dynamic Test"
     },
     {
-        "id": "e6ecd37a93e8b9e8",
+        "id": "8e8db074ba8a2722",
         "type": "matter-dynamic-bridge",
-        "name": "Another Bridge",
+        "name": "New Bridge",
         "vendorId": "65521",
         "productId": "32768",
         "vendorName": "Node-RED",
@@ -49,12 +49,14 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"temperatureMeasurement\":{\"measuredValue\":1150}}",
+        "payload": "{\"temperatureMeasurement\":{\"measuredValue\":950}}",
         "payloadType": "json",
         "x": 110,
         "y": 240,
         "wires": [
-            []
+            [
+                "4810c484daff42bc"
+            ]
         ]
     },
     {
@@ -62,13 +64,82 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "luce",
-        "bridge": "e6ecd37a93e8b9e8",
+        "bridge": "8e8db074ba8a2722",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
         "x": 210,
         "y": 420,
         "wires": [
+            [],
+            [
+                "670b57bca2452c96"
+            ]
+        ]
+    },
+    {
+        "id": "06a601dc80725ca0",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "TV",
+        "bridge": "8e8db074ba8a2722",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"CastingVideoPlayerDevice\",\n  \"initialState\": {\n    \"mediaPlayback\": {\n      \"currentState\": 0 \n    },\n    \"contentLauncher\": {\n      \"supportedStreamingProtocols\": 0,\n      \"acceptHeader\": [] \n    }\n  }\n}",
+        "x": 190,
+        "y": 600,
+        "wires": [
+            [
+                "ddeb44e1aa6d3a0f"
+            ],
             []
         ]
+    },
+    {
+        "id": "ddeb44e1aa6d3a0f",
+        "type": "debug",
+        "z": "matter-test-flow",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "4810c484daff42bc",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "temp",
+        "bridge": "8e8db074ba8a2722",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
+        "x": 210,
+        "y": 500,
+        "wires": [
+            [
+                "68237c7abf68ec5f"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "68237c7abf68ec5f",
+        "type": "debug",
+        "z": "matter-test-flow",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 540,
+        "y": 500,
+        "wires": []
     }
 ]

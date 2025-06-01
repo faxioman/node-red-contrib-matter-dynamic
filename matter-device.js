@@ -1,7 +1,42 @@
 const { Endpoint } = require("@matter/main");
-const { BridgedDeviceBasicInformationServer, IdentifyServer } = require("@matter/main/behaviors");
-const matterDevices = require("@matter/main/devices");
 const matterBehaviors = require("@matter/main/behaviors");
+
+// Patch all behaviors BEFORE loading devices
+Object.values(matterBehaviors).forEach(BehaviorClass => {
+    if (BehaviorClass?.cluster?.commands && typeof BehaviorClass === 'function') {
+        Object.entries(BehaviorClass.cluster.commands).forEach(([cmd, def]) => {
+            // Override existing methods that throw unimplemented
+            const originalMethod = BehaviorClass.prototype[cmd];
+            BehaviorClass.prototype[cmd] = async function(request) {
+                if (this.endpoint?.nodeRed) {
+                    // Send command to second output
+                    this.endpoint.nodeRed.send([null, {
+                        payload: {
+                            command: cmd,
+                            cluster: BehaviorClass.cluster.name,
+                            data: request
+                        }
+                    }]);
+                }
+                
+                // Call original method if exists
+                let result;
+                if (originalMethod && !originalMethod.toString().includes('unimplemented')) {
+                    result = await originalMethod.call(this, request);
+                } else {
+                    if (!def.responseSchema || def.responseSchema.name === 'TlvNoResponse') return;
+                    result = { status: 0 };
+                }
+                
+                return result;
+            };
+        });
+    }
+});
+
+// NOW load devices (they will use patched behaviors)
+const matterDevices = require("@matter/main/devices");
+const { BridgedDeviceBasicInformationServer, IdentifyServer } = matterBehaviors;
 
 // Custom IdentifyServer
 class DynamicIdentifyServer extends IdentifyServer {
@@ -114,7 +149,8 @@ module.exports = function(RED) {
                                         }
                                     }
                                     
-                                    node.send(msg);
+                                    // Send event to first output
+                                    node.send([msg, null]);
                                 };
                                 
                                 clusterEvents[eventName].on(node.eventHandlers[handlerKey]);
@@ -307,10 +343,15 @@ module.exports = function(RED) {
                 Object.assign(endpointConfig, deviceConfig.initialState);
             }
 
-            return new Endpoint(
+            const endpoint = new Endpoint(
                 DeviceClass.with(...behaviors),
                 endpointConfig
             );
+
+            // Pass node reference to the endpoint
+            endpoint.nodeRed = node;
+
+            return endpoint;
         }
 
         // Wait for bridge and register

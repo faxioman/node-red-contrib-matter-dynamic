@@ -16,7 +16,8 @@
             }}
         },
         inputs: 1,
-        outputs: 1,
+        outputs: 2,
+        outputLabels: ["events", "commands"],
         icon: "bridge.png",
         label: function() {
             return this.name || "Matter Device";
@@ -28,7 +29,7 @@
                 mode: 'ace/mode/json',
                 value: this.deviceConfig
             });
-            
+
             // Example configurations
             const examples = {
                 "OnOffLight": {
@@ -68,14 +69,14 @@
                     }
                 }
             };
-            
+
             // Populate examples dropdown
             $("#node-input-example").empty();
             $("#node-input-example").append('<option value="">Select example...</option>');
             Object.keys(examples).forEach(function(key) {
                 $("#node-input-example").append('<option value="' + key + '">' + key + '</option>');
             });
-            
+
             // Handle example selection
             $("#node-input-example").change(function() {
                 var selected = $(this).val();
@@ -102,24 +103,24 @@
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
-    
+
     <div class="form-row">
         <label for="node-input-bridge"><i class="fa fa-server"></i> Bridge</label>
         <input type="text" id="node-input-bridge">
     </div>
-    
+
     <div class="form-row">
         <label for="node-input-passthrough"><i class="fa fa-arrow-right"></i> Pass Through</label>
         <input type="checkbox" id="node-input-passthrough" style="display: inline-block; width: auto; vertical-align: top;">
     </div>
-    
+
     <div class="form-row">
         <label for="node-input-example"><i class="fa fa-list"></i> Examples</label>
         <select id="node-input-example" style="width:70%;">
             <option value="">Select example...</option>
         </select>
     </div>
-    
+
     <div class="form-row">
         <label for="node-input-deviceConfig"><i class="fa fa-code"></i> Config</label>
         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-deviceConfig-editor"></div>
@@ -128,13 +129,13 @@
 
 <script type="text/x-red" data-help-name="matter-device">
     <p>Matter device node that can be configured via JSON.</p>
-    
+
     <h3>Configuration</h3>
     <dl class="message-properties">
         <dt>deviceType <span class="property-type">string</span></dt>
         <dd>The Matter device type (e.g., "OnOffLightDevice", "ThermostatDevice")</dd>
     </dl>
-    
+
     <h3>Inputs</h3>
     <p>The payload must match Matter.js cluster structure exactly:</p>
     <dl class="message-properties">
@@ -146,27 +147,27 @@
                 <li>Thermostat: <code>{thermostat: {occupiedHeatingSetpoint: 2100}}</code></li>
             </ul>
         </dd>
-        
+
         <dt>topic <span class="property-type">string</span></dt>
         <dd>Set to "state" to query current device state</dd>
     </dl>
-    
+
     <h3>Outputs</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">object</span></dt>
         <dd>State changes in same format as input</dd>
-        
+
         <dt>oldValue <span class="property-type">object</span></dt>
         <dd>Previous value (if available)</dd>
     </dl>
-    
+
     <h3>Examples</h3>
     <p><b>Turn on a light:</b><br>
     <code>msg.payload = {onOff: {onOff: true}}</code></p>
-    
+
     <p><b>Set temperature sensor:</b><br>
     <code>msg.payload = {temperatureMeasurement: {measuredValue: 2150}}</code> // 21.5°C</p>
-    
+
     <p><b>Query device state:</b><br>
     <code>msg.topic = "state"</code></p>
 </script>

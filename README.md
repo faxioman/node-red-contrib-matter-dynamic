@@ -134,9 +134,43 @@ npm install node-red-contrib-matter-dynamic
   }
 }
 ```
-Note: Methods like play/pause/stop/launchContent may require custom behaviors implementation.
+
+### Video Player Command Messages
+
+Video players emit command messages when controlled via Matter:
+
+**Media Playback Commands**
+```javascript
+// Received when play is pressed
+msg.payload = {
+  command: "play",
+  cluster: "mediaPlayback"
+}
+
+// Other commands: pause, stop, next, previous, startOver
+// Commands with data: skipForward, skipBackward, seek, rewind, fastForward
+msg.payload = {
+  command: "skipForward",
+  cluster: "mediaPlayback",
+  data: { deltaPositionMilliseconds: 30000 }
+}
+```
+
+**Keypad Input Commands**
+```javascript
+// Received when a key is pressed
+msg.payload = {
+  command: "sendKey",
+  cluster: "keypadInput",
+  data: { keyCode: 0 }  // 0=Select, 1=Up, 2=Down, etc.
+}
+```
 
 ## Input/Output Format
+
+The Matter Device node has **2 outputs**:
+- **Output 1**: Commands received from Matter controllers (HomeKit, Alexa, etc.)
+- **Output 2**: State change events from the device
 
 ### Input Messages
 
@@ -186,7 +220,7 @@ msg.topic = "state"
 
 ### Output Messages
 
-State changes are emitted in the same format:
+**Output 1 - Events** (state changes):
 ```javascript
 // Light state changed
 msg.payload = {
@@ -195,16 +229,34 @@ msg.payload = {
   }
 }
 
-// With previous value
+// Dimmer level changed
 msg.payload = {
   levelControl: {
     currentLevel: 200
   }
 }
-msg.oldValue = {
-  levelControl: {
-    currentLevel: 100
-  }
+```
+
+**Output 2 - Commands** (from Matter controllers):
+```javascript
+// Command received from HomeKit/Alexa
+msg.payload = {
+  command: "on",      // or "off", "toggle"
+  cluster: "OnOff",
+  data: undefined     // Some commands have data
+}
+
+// Command with data
+msg.payload = {
+  command: "moveToLevel",
+  cluster: "LevelControl",
+  data: { level: 128, transitionTime: 10 }
+}
+
+// Video player commands
+msg.payload = {
+  command: "play",
+  cluster: "MediaPlayback"
 }
 ```
 
