@@ -94,6 +94,48 @@ npm install node-red-contrib-matter-dynamic
 }
 ```
 
+### Fan Device
+```json
+{
+  "deviceType": "FanDevice",
+  "initialState": {
+    "fanControl": {
+      "fanModeSequence": 2,  // 0-5 based on supported modes
+      "percentCurrent": 0    // 0-100
+    }
+  }
+}
+```
+
+### Basic Video Player
+```json
+{
+  "deviceType": "BasicVideoPlayerDevice",
+  "initialState": {
+    "mediaPlayback": {
+      "currentState": 0  // 0=Playing, 1=Paused, 2=NotPlaying, 3=Buffering
+    }
+  }
+}
+```
+
+### Casting Video Player
+```json
+{
+  "deviceType": "CastingVideoPlayerDevice",
+  "initialState": {
+    "mediaPlayback": {
+      "currentState": 0  // 0=Playing, 1=Paused, 2=NotPlaying, 3=Buffering
+    },
+    "contentLauncher": {
+      "supportedStreamingProtocols": 0,  // Bitmask of supported protocols
+      "acceptHeader": []  // Array of accepted content types
+    }
+  }
+}
+```
+Note: Methods like play/pause/stop/launchContent may require custom behaviors implementation.
+
 ## Input/Output Format
 
 ### Input Messages
@@ -298,6 +340,8 @@ msg.oldValue = {
 | Thermostat | Set Target | `{thermostat: {occupiedHeatingSetpoint: value*100}}` |
 | Lock | Lock/Unlock | `{doorLock: {lockState: 1/2}}` |
 | Contact | Open/Close | `{booleanState: {stateValue: true/false}}` |
+| Fan | Speed | `{fanControl: {percentSetting: 0-100}}` |
+| Video Player | State | `{mediaPlayback: {currentState: 0/1/2}}` |
 
 ## Support
 
