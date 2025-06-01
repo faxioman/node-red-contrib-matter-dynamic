@@ -19,6 +19,63 @@ module.exports = function(RED) {
         RED.nodes.createNode(this, config);
         var node = this;
         
+        // Catch unhandled Matter.js errors
+        const unhandledRejectionHandler = (reason, promise) => {
+            if (reason && reason.message && reason.message.includes('Behaviors have errors')) {
+                node.error(`Matter.js initialization error: ${reason.message}`);
+                // Extract detailed error information
+                if (reason.errors && reason.errors.length > 0) {
+                    reason.errors.forEach(err => {
+                        if (err.cause) {
+                            node.error(`Device validation error: ${err.cause.message}`);
+                        }
+                    });
+                }
+                // Find which device failed
+                const errorStr = reason.toString();
+                const deviceMatch = errorStr.match(/Error initializing ([a-f0-9]+)\.aggregator\.([a-f0-9]+)/);
+                if (deviceMatch && deviceMatch[2]) {
+                    const failedDeviceId = deviceMatch[2];
+                    const failedChild = node.registered.find(child => 
+                        child.id.replace(/-/g, '') === failedDeviceId
+                    );
+                    if (failedChild) {
+                        const validationMatch = errorStr.match(/Validating [^:]+: (.+)/);
+                        const errorMsg = validationMatch ? validationMatch[1] : 'Missing mandatory attributes';
+                        failedChild.error(`Device initialization failed: ${errorMsg}`);
+                        failedChild.status({fill:"red", shape:"ring", text:"validation error"});
+                        failedChild.deviceInitFailed = true;
+                        failedChild.eventsSubscribed = true; // Prevent future subscription attempts
+                        node.failedDevices.add(failedChild.id);
+                        
+                        // Emit failure event directly to device
+                        failedChild.emit('deviceInitFailed', errorMsg);
+                        
+                        // Remove all event listeners if any
+                        failedChild.removeAllListeners('serverReady');
+                        
+                        // Remove from aggregator if possible
+                        try {
+                            if (node.aggregator && node.aggregator.parts.has(failedDeviceId)) {
+                                node.aggregator.parts.delete(failedDeviceId);
+                            }
+                        } catch (e) {
+                            // Ignore cleanup errors
+                        }
+                    }
+                }
+                return; // Prevent crash
+            }
+        };
+        
+        process.on('unhandledRejection', unhandledRejectionHandler);
+        
+        // Clean up handler on close
+        node.on('close', (removed, done) => {
+            process.removeListener('unhandledRejection', unhandledRejectionHandler);
+            done();
+        });
+        
         // Set log level
         switch (config.logLevel) {
             case "FATAL": Logger.defaultLogLevel = 5; break;
@@ -45,6 +102,7 @@ module.exports = function(RED) {
         node.serverReady = false;
         node.registered = [];
         node.users = [];
+        node.failedDevices = new Set(); // Track failed devices
         
         // Child nodes will be added dynamically when they connect
         
@@ -121,17 +179,54 @@ module.exports = function(RED) {
                 node.log('Starting Matter server...');
                 node.matterServer.start().then(() => {
                     node.log('Matter server started');
-                    node.registered.forEach(child => {
-                        child.emit('serverReady');
-                    });
+                    // Delay to ensure all device initialization errors are caught
+                    setTimeout(() => {
+                        node.registered.forEach(child => {
+                            if (!node.failedDevices.has(child.id) && !child.deviceInitFailed) {
+                                // Test if device is actually accessible before notifying
+                                try {
+                                    if (child.device && child.device.state) {
+                                        // Try to access the device to trigger any initialization errors
+                                        const test = Object.keys(child.device.state);
+                                        child.emit('serverReady');
+                                    } else {
+                                        child.error("Device not properly initialized");
+                                        child.status({fill:"red", shape:"ring", text:"init failed"});
+                                    }
+                                } catch (err) {
+                                    child.error(`Device validation check failed: ${err.message}`);
+                                    child.status({fill:"red", shape:"ring", text:"validation failed"});
+                                    node.failedDevices.add(child.id);
+                                }
+                            }
+                        });
+                    }, 3000);
                 }).catch((err) => {
                     node.error('Failed to start server: ' + err.message);
                 });
             } else if (node.serverReady && node.matterServer.lifecycle.isOnline) {
                 // Server already running, notify children
-                node.registered.forEach(child => {
-                    child.emit('serverReady');
-                });
+                setTimeout(() => {
+                    node.registered.forEach(child => {
+                        if (!node.failedDevices.has(child.id) && !child.deviceInitFailed) {
+                            // Test if device is actually accessible before notifying
+                            try {
+                                if (child.device && child.device.state) {
+                                    // Try to access the device to trigger any initialization errors
+                                    const test = Object.keys(child.device.state);
+                                    child.emit('serverReady');
+                                } else {
+                                    child.error("Device not properly initialized");
+                                    child.status({fill:"red", shape:"ring", text:"init failed"});
+                                }
+                            } catch (err) {
+                                child.error(`Device validation check failed: ${err.message}`);
+                                child.status({fill:"red", shape:"ring", text:"validation failed"});
+                                node.failedDevices.add(child.id);
+                            }
+                        }
+                    });
+                }, 3000);
             }
         }
         
@@ -159,8 +254,12 @@ module.exports = function(RED) {
                 try {
                     node.aggregator.add(child.device);
                     node.log(`Added device ${deviceId} to aggregator`);
+                    child.deviceAddedSuccessfully = true;
                 } catch (error) {
-                    node.error(`Failed to add device: ${error.message}`);
+                    node.error(`Failed to add device ${child.id}: ${error.message}`);
+                    child.error(`Device initialization failed: ${error.message}`);
+                    child.status({fill:"red", shape:"ring", text:"init failed"});
+                    child.deviceAddedSuccessfully = false;
                 }
             }
             
@@ -171,6 +270,7 @@ module.exports = function(RED) {
         };
         
         this.on('close', async function(removed, done) {
+            process.removeListener('unhandledRejection', unhandledRejectionHandler);
             if (node.matterServer) {
                 node.log(removed ? "Bridge removed" : "Bridge restarted");
                 await node.matterServer.close();

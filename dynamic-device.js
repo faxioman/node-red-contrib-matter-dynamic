@@ -36,6 +36,7 @@ module.exports = function(RED) {
         node.pendingmsg = null;
         node.passthrough = /^true$/i.test(config.passthrough);
         node.eventHandlers = {}; // Store event handlers for cleanup
+        node.deviceInitFailed = false; // Track initialization failures
 
         // Dynamic event subscription
         node.subscribeToEvents = function() {
@@ -49,10 +50,22 @@ module.exports = function(RED) {
                 return;
             }
             
+            // Check if device is properly initialized
+            try {
+                // Test access to device properties
+                const testAccess = node.device.state;
+            } catch (err) {
+                node.error(`Device not properly initialized: ${err.message}`);
+                node.status({fill:"red", shape:"ring", text:"init failed"});
+                node.deviceInitFailed = true;
+                return;
+            }
+            
             node.eventsSubscribed = true;
             
             // Subscribe to all $Changed events dynamically
-            Object.keys(node.device.events).forEach(clusterName => {
+            try {
+                Object.keys(node.device.events).forEach(clusterName => {
                 if (clusterName === 'identify') {
                     // Handle identify separately
                     node.identifyStartHandler = () => {
@@ -112,6 +125,11 @@ module.exports = function(RED) {
                     });
                 }
             });
+            } catch (err) {
+                node.error(`Error during event subscription: ${err.message}`);
+                node.status({fill:"red", shape:"ring", text:"init failed"});
+                node.deviceInitFailed = true;
+            }
         };
 
         // Handle input messages
@@ -147,6 +165,18 @@ module.exports = function(RED) {
             }
         });
 
+        // Handle device initialization failure
+        this.on('deviceInitFailed', function(errorMsg) {
+            node.error(`Device validation failed: ${errorMsg}`);
+            node.deviceInitFailed = true;
+            // Force immediate status update
+            node.status({fill:"red", shape:"ring", text:"validation error"});
+            // Clear any pending status updates
+            if (node.statusTimer) {
+                clearTimeout(node.statusTimer);
+            }
+        });
+        
         this.on('serverReady', function() {
             var node = this;
             
@@ -156,13 +186,43 @@ module.exports = function(RED) {
                 return;
             }
             
+            // Check if device was added successfully or failed init
+            if (node.deviceAddedSuccessfully === false || node.deviceInitFailed) {
+                node.log("Device initialization failed, skipping event subscription");
+                return;
+            }
+            
             node.log(`Device state available: ${!!node.device.state}`);
             node.log(`Device events available: ${!!node.device.events}`);
             
-            // NEED delay for Matter.js device initialization
+            // Simple direct check for device initialization
             setTimeout(() => {
-                node.subscribeToEvents();
-                node.status({fill:"green", shape:"dot", text:"ready"});
+                if (node.deviceInitFailed) {
+                    return; // Already handled
+                }
+                
+                try {
+                    // Direct test - if this fails, device is not initialized
+                    if (!node.device || !node.device.state || !node.device.events) {
+                        throw new Error("Device structure incomplete");
+                    }
+                    
+                    // Try to access a property that would fail if not initialized
+                    const testAccess = Object.keys(node.device.state);
+                    
+                    // If we get here, device seems OK, subscribe to events
+                    node.subscribeToEvents();
+                    
+                    // Only set ready if subscribeToEvents didn't fail
+                    if (!node.deviceInitFailed) {
+                        node.status({fill:"green", shape:"dot", text:"ready"});
+                    }
+                    
+                } catch (err) {
+                    node.error(`Device not properly initialized: ${err.message}`);
+                    node.status({fill:"red", shape:"ring", text:"init failed"});
+                    node.deviceInitFailed = true;
+                }
             }, 2000);
         });
 
@@ -192,6 +252,7 @@ module.exports = function(RED) {
 
             // Remove Node-RED Custom Events
             node.removeAllListeners('serverReady');
+            node.removeAllListeners('deviceInitFailed');
 
             // Remove from bridge
             if (node.bridge && node.bridge.registered) {

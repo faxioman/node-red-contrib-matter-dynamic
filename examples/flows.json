@@ -90,5 +90,21 @@
                 "dynamic-sensor"
             ]
         ]
+    },
+    {
+        "id": "5b0d05de45f157e2",
+        "type": "matter-dynamic-device",
+        "z": "matter-test-flow",
+        "name": "Fan",
+        "bridge": "519d6f7c6aac4b9d",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"FanDevice\",\n  \"initialState\": {\n    \"fanControl\": {\n      \"fanModeSequence\": 0,\n      \"percentCurrent\": 0\n    }\n  }\n}",
+        "x": 310,
+        "y": 300,
+        "wires": [
+            [
+                "670b57bca2452c96"
+            ]
+        ]
     }
 ]
