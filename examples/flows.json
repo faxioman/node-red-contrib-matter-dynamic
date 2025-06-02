@@ -5,9 +5,9 @@
         "label": "Matter Dynamic Test"
     },
     {
-        "id": "8e8db074ba8a2722",
+        "id": "f7cb19467d014a90",
         "type": "matter-dynamic-bridge",
-        "name": "New Bridge",
+        "name": "Matter Bridge",
         "vendorId": "65521",
         "productId": "32768",
         "vendorName": "Node-RED",
@@ -30,8 +30,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 580,
-        "y": 180,
+        "x": 600,
+        "y": 460,
         "wires": []
     },
     {
@@ -51,8 +51,8 @@
         "topic": "",
         "payload": "{\"temperatureMeasurement\":{\"measuredValue\":950}}",
         "payloadType": "json",
-        "x": 110,
-        "y": 240,
+        "x": 170,
+        "y": 560,
         "wires": [
             [
                 "4810c484daff42bc"
@@ -64,33 +64,16 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "luce",
-        "bridge": "8e8db074ba8a2722",
+        "bridge": "f7cb19467d014a90",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
-        "x": 210,
-        "y": 420,
+        "x": 370,
+        "y": 460,
         "wires": [
             [],
             [
                 "670b57bca2452c96"
             ]
-        ]
-    },
-    {
-        "id": "06a601dc80725ca0",
-        "type": "matter-device",
-        "z": "matter-test-flow",
-        "name": "TV",
-        "bridge": "8e8db074ba8a2722",
-        "passthrough": false,
-        "deviceConfig": "{\n  \"deviceType\": \"CastingVideoPlayerDevice\",\n  \"initialState\": {\n    \"mediaPlayback\": {\n      \"currentState\": 0 \n    },\n    \"contentLauncher\": {\n      \"supportedStreamingProtocols\": 0,\n      \"acceptHeader\": [] \n    }\n  }\n}",
-        "x": 190,
-        "y": 600,
-        "wires": [
-            [
-                "ddeb44e1aa6d3a0f"
-            ],
-            []
         ]
     },
     {
@@ -105,8 +88,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 420,
-        "y": 600,
+        "x": 600,
+        "y": 660,
         "wires": []
     },
     {
@@ -114,11 +97,11 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "temp",
-        "bridge": "8e8db074ba8a2722",
+        "bridge": "f7cb19467d014a90",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
-        "x": 210,
-        "y": 500,
+        "x": 370,
+        "y": 560,
         "wires": [
             [
                 "68237c7abf68ec5f"
@@ -138,8 +121,87 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 540,
-        "y": 500,
+        "x": 600,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "04d965065e9cd5f3",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "term",
+        "bridge": "f7cb19467d014a90",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"controlSequenceOfOperation\": 4,\n      \"minHeatSetpointLimit\": 500,\n      \"maxHeatSetpointLimit\": 3500,\n      \"minCoolSetpointLimit\": 0,\n      \"maxCoolSetpointLimit\": 2100,\n      \"occupiedHeatingSetpoint\": 2000,\n      \"occupiedCoolingSetpoint\": 2600\n    }\n  }\n}",
+        "x": 370,
+        "y": 660,
+        "wires": [
+            [
+                "ddeb44e1aa6d3a0f"
+            ],
+            [
+                "ddeb44e1aa6d3a0f"
+            ]
+        ]
+    },
+    {
+        "id": "01c1bf6a09b22128",
+        "type": "inject",
+        "z": "matter-test-flow",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"thermostat\":{\"localTemperature\":2850}}",
+        "payloadType": "json",
+        "x": 170,
+        "y": 660,
+        "wires": [
+            [
+                "04d965065e9cd5f3"
+            ]
+        ]
+    },
+    {
+        "id": "dd36f24b5e3284ac",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "switch",
+        "bridge": "f7cb19467d014a90",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"GenericSwitchDevice\",\n  \"initialState\": {\n    \"switch\": {\n      \"numberOfPositions\": 3,\n      \"currentPosition\": 0\n    }\n  }\n}",
+        "x": 370,
+        "y": 760,
+        "wires": [
+            [
+                "562027c3db65c7dc"
+            ],
+            [
+                "562027c3db65c7dc"
+            ]
+        ]
+    },
+    {
+        "id": "562027c3db65c7dc",
+        "type": "debug",
+        "z": "matter-test-flow",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 600,
+        "y": 760,
         "wires": []
     }
 ]

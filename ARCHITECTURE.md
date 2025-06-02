@@ -24,6 +24,9 @@ This project implements dynamic Matter device nodes for Node-RED, allowing users
 
 ## Architecture Design
 
+### CRITICAL DESIGN PRINCIPLE: NO HARDCODED DEVICE-SPECIFIC LOGIC
+**This system MUST remain completely generic. NEVER hardcode behaviors, attributes, or logic for specific device types. All device capabilities must be discovered and handled dynamically at runtime.**
+
 ### Device Creation Flow
 ```
 1. User configures device with JSON: {"deviceType": "OnOffLightDevice"}

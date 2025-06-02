@@ -58,6 +58,17 @@ npm install node-red-contrib-matter-dynamic
 }
 ```
 
+### Advanced Configuration with Behavior Features
+Some devices require specific features to be enabled on their behaviors:
+```json
+{
+  "deviceType": "DeviceType",
+  "behaviorFeatures": {
+    "BehaviorName": ["Feature1", "Feature2"]
+  }
+}
+```
+
 ### Dimmable Light
 ```json
 {
@@ -79,16 +90,52 @@ npm install node-red-contrib-matter-dynamic
 }
 ```
 
+### Generic Switch (Multi-button)
+```json
+{
+  "deviceType": "GenericSwitchDevice",
+  "initialState": {
+    "switch": {
+      "numberOfPositions": 2,     // Number of buttons (2 = on/off)
+      "currentPosition": 0,       // Initial position (0-based)
+      "multiPressMax": 2         // Max consecutive presses
+    }
+  }
+}
+```
+
+For a 3-button switch:
+```json
+{
+  "deviceType": "GenericSwitchDevice",
+  "initialState": {
+    "switch": {
+      "numberOfPositions": 3,
+      "currentPosition": 0
+    }
+  }
+}
+```
+
 ### Thermostat
+Thermostats require features to be specified:
 ```json
 {
   "deviceType": "ThermostatDevice",
+  "behaviorFeatures": {
+    "Thermostat": ["Heating", "Cooling"]  // Specify features needed
+  },
   "initialState": {
     "thermostat": {
-      "systemMode": 0,
-      "controlSequenceOfOperation": 0,
-      "minHeatSetpointLimit": 700,
-      "maxHeatSetpointLimit": 3000
+      "localTemperature": 2000,
+      "systemMode": 4,
+      "controlSequenceOfOperation": 4,  // 2=HeatingOnly, 4=CoolingAndHeating
+      "minHeatSetpointLimit": 500,
+      "maxHeatSetpointLimit": 3500,
+      "minCoolSetpointLimit": 0,
+      "maxCoolSetpointLimit": 2100,
+      "occupiedHeatingSetpoint": 2000,
+      "occupiedCoolingSetpoint": 2600
     }
   }
 }
@@ -380,6 +427,14 @@ msg.payload = {
 - Use "Reopen Commissioning" if already paired
 - Check firewall settings for port 5540 (or configured port)
 - Ensure mDNS is working on your network
+
+### Device validation errors
+Some devices have complex requirements:
+- **GenericSwitchDevice**: Requires explicit button configuration
+- **ThermostatDevice**: Requires features to be specified via `behaviorFeatures`
+- **BasicVideoPlayerDevice**: Not supported by Alexa (Matter 1.4 device)
+
+When devices fail validation, check Node-RED logs for specific missing attributes.
 
 ### Common Payload Format Reference
 

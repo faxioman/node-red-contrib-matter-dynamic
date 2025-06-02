@@ -312,8 +312,38 @@ module.exports = function(RED) {
                 throw new Error(`Device type '${deviceConfig.deviceType}' not found`);
             }
 
-            // Base behaviors
-            const behaviors = [BridgedDeviceBasicInformationServer, DynamicIdentifyServer];
+            // Get required behaviors
+            const behaviors = [];
+            
+            // Standard behavior loading
+            if (DeviceClass.requirements && DeviceClass.requirements.server && DeviceClass.requirements.server.mandatory) {
+                Object.entries(DeviceClass.requirements.server.mandatory).forEach(([key, BehaviorClass]) => {
+                    if (BehaviorClass) {
+                        // Check if this behavior needs features
+                        const behaviorName = key.replace('Server', '');
+                        if (deviceConfig.behaviorFeatures && deviceConfig.behaviorFeatures[behaviorName]) {
+                            // Import the cluster to get features
+                            const clusters = require("@matter/main/clusters");
+                            const cluster = clusters[behaviorName];
+                            
+                            const features = deviceConfig.behaviorFeatures[behaviorName].map(fname => 
+                                cluster?.Feature?.[fname]
+                            ).filter(f => f);
+                            
+                            if (features.length > 0) {
+                                behaviors.push(BehaviorClass.with(...features));
+                            } else {
+                                behaviors.push(BehaviorClass);
+                            }
+                        } else {
+                            behaviors.push(BehaviorClass);
+                        }
+                    }
+                });
+            }
+            
+            // Add our base behaviors
+            behaviors.push(BridgedDeviceBasicInformationServer, DynamicIdentifyServer);
 
             // Add additional behaviors if specified
             if (deviceConfig.additionalBehaviors) {
@@ -343,6 +373,7 @@ module.exports = function(RED) {
                 Object.assign(endpointConfig, deviceConfig.initialState);
             }
 
+            // Create endpoint
             const endpoint = new Endpoint(
                 DeviceClass.with(...behaviors),
                 endpointConfig
