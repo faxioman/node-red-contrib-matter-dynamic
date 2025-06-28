@@ -12,6 +12,11 @@ node_modules/
 /examples/.config.runtime.json
 /examples/.config.users.json
 
+# npm
+.npm
+*.tgz
+
 # Other
 *.backup
+.DS_Store
 

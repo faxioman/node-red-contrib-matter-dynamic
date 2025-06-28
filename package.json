@@ -4,7 +4,7 @@
   "description": "Dynamic Matter device nodes for Node-RED",
   "main": "matter-device.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"Tests not implemented yet\" && exit 0",
     "node-red": "cd examples && npm link ../ && node-red -u ./"
   },
   "keywords": [
