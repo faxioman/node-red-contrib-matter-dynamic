@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,7 +21,7 @@ jobs:
           node-version: '18.x'
           
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         
       - name: Run tests
         run: npm test
@@ -35,7 +39,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         
       - name: Publish to npm
         run: npm publish --access public
@@ -43,12 +47,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
           
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
           body: |
             Changes in this Release:
             - Check the [CHANGELOG.md](https://github.com/faxioman/node-red-contrib-matter-dynamic/blob/main/CHANGELOG.md) for details
@@ -59,3 +59,5 @@ jobs:
             ```
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
