@@ -1,5 +1,5 @@
 {
-  "name": "node-red-contrib-matter-dynamic",
+  "name": "@faxioman/node-red-contrib-matter-dynamic",
   "version": "0.1.0",
   "description": "Dynamic Matter device nodes for Node-RED",
   "main": "matter-device.js",
@@ -30,6 +30,9 @@
     "url": "https://github.com/faxioman/node-red-contrib-matter-dynamic/issues"
   },
   "homepage": "https://github.com/faxioman/node-red-contrib-matter-dynamic#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@matter/main": "^0.13.0",
     "qrcode": "^1.5.4"

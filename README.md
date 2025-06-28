@@ -5,7 +5,7 @@ Dynamic Matter device nodes for Node-RED. Create any Matter device by specifying
 ## Installation
 
 ```bash
-npm install node-red-contrib-matter-dynamic
+npm install @faxioman/node-red-contrib-matter-dynamic
 ```
 
 ## Requirements

@@ -38,7 +38,7 @@ jobs:
         run: npm ci
         
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
           
@@ -55,7 +55,7 @@ jobs:
             
             ## Installation
             ```bash
-            npm install node-red-contrib-matter-dynamic@${{ github.ref_name }}
+            npm install @faxioman/node-red-contrib-matter-dynamic@${{ github.ref_name }}
             ```
           draft: false
           prerelease: false
