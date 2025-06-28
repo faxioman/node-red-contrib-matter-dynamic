@@ -10,6 +10,8 @@ node_modules/
 
 /examples/.config.nodes.json
 /examples/.config.runtime.json
+/examples/.config.users.json
 
 # Other
 *.backup
+
