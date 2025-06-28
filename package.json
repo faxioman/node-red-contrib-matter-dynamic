@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-matter-dynamic",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Dynamic Matter device nodes for Node-RED",
   "main": "matter-device.js",
   "scripts": {
@@ -9,12 +9,27 @@
   },
   "keywords": [
     "node-red",
+    "node-red-contrib",
     "matter",
+    "matter-js",
     "iot",
-    "dynamic"
+    "smart-home",
+    "homekit",
+    "google-home",
+    "alexa",
+    "dynamic",
+    "bridge"
   ],
-  "author": "",
+  "author": "faxioman",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/faxioman/node-red-contrib-matter-dynamic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/faxioman/node-red-contrib-matter-dynamic/issues"
+  },
+  "homepage": "https://github.com/faxioman/node-red-contrib-matter-dynamic#readme",
   "dependencies": {
     "@matter/main": "^0.13.0",
     "qrcode": "^1.5.4"

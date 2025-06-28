@@ -1,3 +1,26 @@
+# Development directories
 /examples/
 /.idea/
+/.git/
+
+# Configuration files
 .gitignore
+.gitattributes
+
+# Documentation source files
+*.backup
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+.DS_Store
+
+# Test files
+test/
+__tests__/
+*.test.js
+*.spec.js
+
+# Build and CI files
+.travis.yml
+.github/

@@ -452,7 +452,7 @@ When devices fail validation, check Node-RED logs for specific missing attribute
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com/your-repo/node-red-contrib-matter-dynamic/issues)
+- GitHub Issues: [Report bugs or request features](https://github.com/faxioman/node-red-contrib-matter-dynamic/issues)
 - Node-RED Forum: [Get help from the community](https://discourse.nodered.org)
 
 ## Contributing
@@ -464,5 +464,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 MIT
 
 ## Acknowledgments
+
+This project was heavily inspired by and based on the excellent work done in [node-red-matter-bridge](https://github.com/sammachin/node-red-matter-bridge) by Sam Machin. The architecture and implementation patterns from that project served as a fundamental guide for developing this dynamic Matter bridge implementation.
 
 Built on top of the excellent [Matter.js](https://github.com/project-chip/matter.js) library.
