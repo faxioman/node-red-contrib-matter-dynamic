@@ -307,6 +307,12 @@ module.exports = function(RED) {
 
         // Create device dynamically based on configuration
         function createDevice() {
+            // Check for multi-type device (array of device types)
+            if (Array.isArray(deviceConfig.deviceType)) {
+                return createCompositeDevice();
+            }
+            
+            // Standard single device type
             const DeviceClass = matterDevices[deviceConfig.deviceType];
             if (!DeviceClass) {
                 throw new Error(`Device type '${deviceConfig.deviceType}' not found`);
@@ -350,7 +356,24 @@ module.exports = function(RED) {
                 deviceConfig.additionalBehaviors.forEach(behaviorName => {
                     const BehaviorClass = matterBehaviors[behaviorName];
                     if (BehaviorClass) {
-                        behaviors.push(BehaviorClass);
+                        // Check if behavior needs features
+                        const clusterName = behaviorName.replace('Server', '');
+                        if (deviceConfig.behaviorFeatures && deviceConfig.behaviorFeatures[clusterName]) {
+                            const clusters = require("@matter/main/clusters");
+                            const cluster = clusters[clusterName];
+                            
+                            const features = deviceConfig.behaviorFeatures[clusterName].map(fname =>
+                                cluster?.Feature?.[fname]
+                            ).filter(f => f);
+                            
+                            if (features.length > 0) {
+                                behaviors.push(BehaviorClass.with(...features));
+                            } else {
+                                behaviors.push(BehaviorClass);
+                            }
+                        } else {
+                            behaviors.push(BehaviorClass);
+                        }
                     }
                 });
             }
@@ -382,6 +405,111 @@ module.exports = function(RED) {
             // Pass node reference to the endpoint
             endpoint.nodeRed = node;
 
+            return endpoint;
+        }
+        
+        // Create device with additional behaviors (for devices that need extra clusters like PowerSource)
+        function createCompositeDevice() {
+            // In Matter, a device can only have ONE primary device type
+            // Additional functionality is added through behaviors/clusters, not device types
+            // So we take the FIRST device type as the main one
+            if (!Array.isArray(deviceConfig.deviceType) || deviceConfig.deviceType.length === 0) {
+                throw new Error("deviceType must be an array with at least one device type");
+            }
+            
+            const primaryDeviceTypeName = deviceConfig.deviceType[0];
+            const DeviceClass = matterDevices[primaryDeviceTypeName];
+            if (!DeviceClass) {
+                throw new Error(`Device type '${primaryDeviceTypeName}' not found`);
+            }
+            
+            // Get required behaviors from the primary device type
+            const behaviors = [];
+            
+            // Standard behavior loading
+            if (DeviceClass.requirements && DeviceClass.requirements.server && DeviceClass.requirements.server.mandatory) {
+                Object.entries(DeviceClass.requirements.server.mandatory).forEach(([key, BehaviorClass]) => {
+                    if (BehaviorClass) {
+                        // Check if this behavior needs features
+                        const behaviorName = key.replace('Server', '');
+                        if (deviceConfig.behaviorFeatures && deviceConfig.behaviorFeatures[behaviorName]) {
+                            // Import the cluster to get features
+                            const clusters = require("@matter/main/clusters");
+                            const cluster = clusters[behaviorName];
+                            
+                            const features = deviceConfig.behaviorFeatures[behaviorName].map(fname =>
+                                cluster?.Feature?.[fname]
+                            ).filter(f => f);
+                            
+                            if (features.length > 0) {
+                                behaviors.push(BehaviorClass.with(...features));
+                            } else {
+                                behaviors.push(BehaviorClass);
+                            }
+                        } else {
+                            behaviors.push(BehaviorClass);
+                        }
+                    }
+                });
+            }
+            
+            // Add our base behaviors
+            behaviors.push(BridgedDeviceBasicInformationServer, DynamicIdentifyServer);
+            
+            // Add additional behaviors if specified
+            if (deviceConfig.additionalBehaviors) {
+                deviceConfig.additionalBehaviors.forEach(behaviorName => {
+                    const BehaviorClass = matterBehaviors[behaviorName];
+                    if (BehaviorClass) {
+                        // Check if behavior needs features
+                        const clusterName = behaviorName.replace('Server', '');
+                        if (deviceConfig.behaviorFeatures && deviceConfig.behaviorFeatures[clusterName]) {
+                            const clusters = require("@matter/main/clusters");
+                            const cluster = clusters[clusterName];
+                            
+                            const features = deviceConfig.behaviorFeatures[clusterName].map(fname =>
+                                cluster?.Feature?.[fname]
+                            ).filter(f => f);
+                            
+                            if (features.length > 0) {
+                                behaviors.push(BehaviorClass.with(...features));
+                            } else {
+                                behaviors.push(BehaviorClass);
+                            }
+                        } else {
+                            behaviors.push(BehaviorClass);
+                        }
+                    }
+                });
+            }
+            
+            // Create endpoint configuration
+            const endpointConfig = {
+                id: node.id.replace(/-/g, ''),  // Remove all hyphens
+                bridgedDeviceBasicInformation: {
+                    nodeLabel: node.name,
+                    productName: node.name,
+                    productLabel: node.name,
+                    serialNumber: node.id.replace(/-/g, ''),
+                    uniqueId: node.id.replace(/-/g, '').split("").reverse().join(""),
+                    reachable: true,
+                }
+            };
+            
+            // Add initial state if provided
+            if (deviceConfig.initialState) {
+                Object.assign(endpointConfig, deviceConfig.initialState);
+            }
+            
+            // Create endpoint - same as single device but with additional behaviors
+            const endpoint = new Endpoint(
+                DeviceClass.with(...behaviors),
+                endpointConfig
+            );
+            
+            // Pass node reference to the endpoint
+            endpoint.nodeRed = node;
+            
             return endpoint;
         }
 

@@ -227,6 +227,69 @@ Example messages:
   - Video Players (Matter 1.4) - Not recognized by HomeKit/Tuya yet
   - Advanced features may require specific controller support
 
+## Composite Devices Architecture
+
+### Overview
+The system supports creating composite devices by combining multiple device types on a single endpoint, following the approach proven in matterbridge-zigbee2mqtt.
+
+### Composite Device Implementation
+Combines multiple device types on a single endpoint using an array:
+```javascript
+{
+  "deviceType": ["ThermostatDevice", "PowerSourceDevice"]
+}
+```
+
+### How It Works
+1. **Device Type Collection**: All specified device types are collected
+2. **Behavior Aggregation**: All required behaviors from all device types are merged
+3. **Duplicate Removal**: Duplicate behaviors are automatically filtered out
+4. **Single Endpoint**: Everything runs on a single BridgedNodeEndpoint
+
+### Example: Thermostat with Battery
+```javascript
+// Configuration
+{
+  "deviceType": ["ThermostatDevice", "PowerSourceDevice"],
+  "behaviorFeatures": {
+    "Thermostat": ["Heating", "Cooling"]
+  },
+  "initialState": {
+    "thermostat": {
+      "localTemperature": 2000,
+      "systemMode": 4,
+      "occupiedHeatingSetpoint": 2000
+    },
+    "powerSource": {
+      "batPercentRemaining": 100,
+      "batChargeLevel": 1
+    }
+  }
+}
+
+// Results in single endpoint with:
+// - ThermostatServer (with Heating/Cooling features)
+// - PowerSourceServer
+// - BridgedDeviceBasicInformationServer
+// - IdentifyServer
+```
+
+### Benefits
+- **Simple**: One endpoint manages all functionality
+- **Compatible**: Works with all Matter controllers
+- **Efficient**: No complex child endpoint management
+- **Proven**: Same approach as matterbridge-zigbee2mqtt
+
+### Event Handling
+All events come from the same endpoint:
+```javascript
+// Thermostat event
+{ payload: { thermostat: { localTemperature: 2150 } } }
+
+// Battery event
+{ payload: { powerSource: { batPercentRemaining: 90 } } }
+```
+
 ## Next Steps
 
 1. **Add More Examples**: Create comprehensive examples for all device types
@@ -235,7 +298,7 @@ Example messages:
    - Example: Extract `fanModeSequence`, `percentCurrent` from validation logs
    - Goal: Show user-friendly list of missing mandatory attributes
 3. **Documentation**: Expand user documentation with more device examples
-4. **Testing**: Add automated tests for various device types
+4. **Testing**: Add automated tests for various device types including composite devices
 5. **Generic Command Handler**: Extend dynamic command handling to all clusters with commands
 
 ## Dependencies

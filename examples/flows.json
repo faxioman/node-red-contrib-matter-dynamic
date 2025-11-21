@@ -5,7 +5,7 @@
         "label": "Matter Dynamic Test"
     },
     {
-        "id": "f7cb19467d014a90",
+        "id": "3b9946b4c3e5200c",
         "type": "matter-dynamic-bridge",
         "name": "Matter Bridge",
         "vendorId": "65521",
@@ -21,6 +21,7 @@
         "id": "670b57bca2452c96",
         "type": "debug",
         "z": "matter-test-flow",
+        "d": true,
         "name": "debug 1",
         "active": true,
         "tosidebar": true,
@@ -38,6 +39,7 @@
         "id": "c17a50605965b6db",
         "type": "inject",
         "z": "matter-test-flow",
+        "d": true,
         "name": "",
         "props": [
             {
@@ -63,8 +65,9 @@
         "id": "c1bec938dcb1936f",
         "type": "matter-device",
         "z": "matter-test-flow",
+        "d": true,
         "name": "luce",
-        "bridge": "f7cb19467d014a90",
+        "bridge": "",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
         "x": 370,
@@ -80,6 +83,7 @@
         "id": "ddeb44e1aa6d3a0f",
         "type": "debug",
         "z": "matter-test-flow",
+        "d": true,
         "name": "debug 2",
         "active": true,
         "tosidebar": true,
@@ -96,8 +100,9 @@
         "id": "4810c484daff42bc",
         "type": "matter-device",
         "z": "matter-test-flow",
+        "d": true,
         "name": "temp",
-        "bridge": "f7cb19467d014a90",
+        "bridge": "",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
         "x": 370,
@@ -113,6 +118,7 @@
         "id": "68237c7abf68ec5f",
         "type": "debug",
         "z": "matter-test-flow",
+        "d": true,
         "name": "debug 3",
         "active": true,
         "tosidebar": true,
@@ -129,8 +135,9 @@
         "id": "04d965065e9cd5f3",
         "type": "matter-device",
         "z": "matter-test-flow",
+        "d": true,
         "name": "term",
-        "bridge": "f7cb19467d014a90",
+        "bridge": "",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"controlSequenceOfOperation\": 4,\n      \"minHeatSetpointLimit\": 500,\n      \"maxHeatSetpointLimit\": 3500,\n      \"minCoolSetpointLimit\": 0,\n      \"maxCoolSetpointLimit\": 2100,\n      \"occupiedHeatingSetpoint\": 2000,\n      \"occupiedCoolingSetpoint\": 2600\n    }\n  }\n}",
         "x": 370,
@@ -148,6 +155,7 @@
         "id": "01c1bf6a09b22128",
         "type": "inject",
         "z": "matter-test-flow",
+        "d": true,
         "name": "",
         "props": [
             {
@@ -173,8 +181,9 @@
         "id": "dd36f24b5e3284ac",
         "type": "matter-device",
         "z": "matter-test-flow",
+        "d": true,
         "name": "switch",
-        "bridge": "f7cb19467d014a90",
+        "bridge": "",
         "passthrough": false,
         "deviceConfig": "{\n  \"deviceType\": \"GenericSwitchDevice\",\n  \"initialState\": {\n    \"switch\": {\n      \"numberOfPositions\": 3,\n      \"currentPosition\": 0\n    }\n  }\n}",
         "x": 370,
@@ -192,6 +201,7 @@
         "id": "562027c3db65c7dc",
         "type": "debug",
         "z": "matter-test-flow",
+        "d": true,
         "name": "debug 4",
         "active": true,
         "tosidebar": true,
@@ -203,5 +213,66 @@
         "x": 600,
         "y": 760,
         "wires": []
+    },
+    {
+        "id": "inject1",
+        "type": "inject",
+        "z": "matter-test-flow",
+        "name": "Get State",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"powerSource\":{\"status\":1,\"order\":1,\"description\":\"Battery\",\"batChargeLevel\":0,\"batPercentRemaining\":10,\"batReplacementNeeded\":true,\"batReplaceability\":1}}",
+        "payloadType": "json",
+        "x": 320,
+        "y": 180,
+        "wires": [
+            [
+                "b03d3b62b8763ec2"
+            ]
+        ]
+    },
+    {
+        "id": "debug1",
+        "type": "debug",
+        "z": "matter-test-flow",
+        "name": "Output",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 720,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "b03d3b62b8763ec2",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "prova",
+        "bridge": "3b9946b4c3e5200c",
+        "passthrough": false,
+        "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"additionalBehaviors\": [\n    \"PowerSourceServer\"\n  ],\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ],\n    \"PowerSource\": [\n      \"Battery\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"controlSequenceOfOperation\": 4,\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"occupiedHeatingSetpoint\": 2000,\n      \"occupiedCoolingSetpoint\": 2600\n    },\n    \"powerSource\": {\n      \"status\": 1,\n      \"order\": 1,\n      \"description\": \"Battery\",\n      \"batChargeLevel\": 0,\n      \"batPercentRemaining\": 200,\n      \"batReplacementNeeded\": false,\n      \"batReplaceability\": 1\n    }\n  }\n}",
+        "x": 490,
+        "y": 180,
+        "wires": [
+            [
+                "debug1"
+            ],
+            [
+                "debug1"
+            ]
+        ]
     }
 ]

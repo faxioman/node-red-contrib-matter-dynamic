@@ -20,6 +20,7 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 - 🔄 Automatic event subscription and state management
 - 📱 Compatible with Apple HomeKit, Google Home, Amazon Alexa (via Matter)
 - 🎯 Support for all Matter.js device types
+- 🔋 **NEW:** Composite devices support (e.g., thermostat with battery)
 
 ## Quick Start
 
@@ -58,7 +59,9 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 }
 ```
 
-### Advanced Configuration with Behavior Features
+### Advanced Configuration
+
+#### Behavior Features
 Some devices require specific features to be enabled on their behaviors:
 ```json
 {
@@ -68,6 +71,26 @@ Some devices require specific features to be enabled on their behaviors:
   }
 }
 ```
+
+#### Additional Behaviors
+You can add extra behaviors (clusters) to any device type. This is useful for adding battery status, power monitoring, or other capabilities:
+```json
+{
+  "deviceType": "YourDeviceType",
+  "additionalBehaviors": ["PowerSourceServer", "ElectricalEnergyMeasurementServer"],
+  "initialState": {
+    "powerSource": {
+      "status": 1,
+      "batPercentRemaining": 100
+    }
+  }
+}
+```
+
+**Common Additional Behaviors:**
+- `PowerSourceServer` - Battery/power status
+- `ElectricalEnergyMeasurementServer` - Energy monitoring
+- `BooleanStateServer` - Binary state indication
 
 ### Dimmable Light
 ```json
@@ -140,6 +163,140 @@ Thermostats require features to be specified:
   }
 }
 ```
+
+### Enhanced Devices with Additional Behaviors (NEW!)
+Add extra functionality to any device using additional behaviors/clusters.
+
+**Important Note**: In Matter, each endpoint can only have ONE primary device type. Additional functionality (like battery status) is added through behaviors/clusters, NOT by combining device types.
+
+#### Thermostat with Battery Status
+```json
+{
+  "deviceType": "ThermostatDevice",
+  "additionalBehaviors": ["PowerSourceServer"],
+  "behaviorFeatures": {
+    "Thermostat": ["Heating", "Cooling"],
+    "PowerSource": ["Battery", "Replaceable"]
+  },
+  "initialState": {
+    "thermostat": {
+      "localTemperature": 2000,
+      "systemMode": 4,
+      "controlSequenceOfOperation": 4,
+      "occupiedHeatingSetpoint": 2000,
+      "occupiedCoolingSetpoint": 2600
+    },
+    "powerSource": {
+      "status": 1,
+      "order": 1,
+      "description": "Battery",
+      "batChargeLevel": 0,
+      "batPercentRemaining": 200,
+      "batReplacementNeeded": false,
+      "batReplaceability": 1
+    }
+  }
+}
+```
+
+**Key Points:**
+- `controlSequenceOfOperation` is mandatory for Thermostat (4 = Cooling and Heating)
+- `PowerSource` with Battery feature requires specifying `["Battery", "Replaceable"]` in behaviorFeatures
+- `batPercentRemaining`: 200 = 100% (value is percentage × 2)
+- `batChargeLevel`: 0=Ok, 1=Warning, 2=Critical
+- `batReplacementNeeded`: Mandatory with Battery feature (true/false)
+- `batReplaceability`: Mandatory with Battery feature (0=Unspecified, 1=NotReplaceable, 2=UserReplaceable, 3=FactoryReplaceable)
+
+#### Motion Sensor with Battery
+```json
+{
+  "deviceType": "MotionSensorDevice",
+  "additionalBehaviors": ["PowerSourceServer"],
+  "initialState": {
+    "occupancySensing": {
+      "occupancy": { occupied: false }
+    },
+    "powerSource": {
+      "status": 1,
+      "order": 1,
+      "batPercentRemaining": 100,
+      "batChargeLevel": 1,
+      "description": "Battery"
+    }
+  }
+}
+```
+
+#### Contact Sensor with Battery
+```json
+{
+  "deviceType": "ContactSensorDevice",
+  "additionalBehaviors": ["PowerSourceServer"],
+  "behaviorFeatures": {
+    "PowerSource": ["Battery", "Replaceable"]
+  },
+  "initialState": {
+    "booleanState": {
+      "stateValue": false
+    },
+    "powerSource": {
+      "status": 1,
+      "order": 1,
+      "description": "CR2032 Battery",
+      "batChargeLevel": 0,
+      "batPercentRemaining": 190,
+      "batReplaceability": 1,
+      "batReplacementNeeded": false
+    }
+  }
+}
+```
+
+### Updating Battery Status
+
+To update the battery level or other PowerSource attributes, send a message with the `powerSource` object:
+
+```json
+{
+  "payload": {
+    "powerSource": {
+      "batPercentRemaining": 150,      // 75% (value × 2)
+      "batReplacementNeeded": false
+    }
+  }
+}
+```
+
+You can update any combination of PowerSource attributes:
+
+```json
+{
+  "payload": {
+    "powerSource": {
+      "status": 0,                     // 0=Active, 1=Standby, 2=Unavailable
+      "batPercentRemaining": 100,      // 50% battery (value × 2)
+      "batReplacementNeeded": true,    // Battery needs replacement
+      "batChargeLevel": 1              // 0=OK, 1=Warning, 2=Critical
+    }
+  }
+}
+```
+
+You can also update device state and battery together:
+```json
+{
+  "payload": {
+    "thermostat": {
+      "localTemperature": 2150        // 21.5°C
+    },
+    "powerSource": {
+      "batPercentRemaining": 120      // 60% battery
+    }
+  }
+}
+```
+
+The device will emit events when these values change, allowing you to monitor battery status in real-time.
 
 ### Fan Device
 ```json
