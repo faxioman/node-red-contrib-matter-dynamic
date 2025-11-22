@@ -1,4 +1,5 @@
-const { Endpoint, Environment, ServerNode, Logger, VendorId, StorageService } = require("@matter/main");
+const { Endpoint, Environment, ServerNode, Logger, VendorId, StorageService, DeviceCommissioner } = require("@matter/main");
+const crypto = require('crypto');
 const { AggregatorEndpoint } = require("@matter/main/endpoints");
 const { NetworkCommissioning } = require("@matter/main/clusters");
 const { NetworkCommissioningServer } = require("@matter/main/behaviors");
@@ -439,12 +440,6 @@ class HttpApiHandler {
             this.getCommissioningInfo.bind(this, RED)
         );
         
-        // Reopen commissioning window
-        RED.httpAdmin.get('/_matterbridge/reopen/:id', 
-            RED.auth.needsPermission('admin.write'), 
-            this.reopenCommissioning.bind(this, RED)
-        );
-        
         // Get network interfaces
         RED.httpAdmin.get('/_matterbridge/interfaces', 
             RED.auth.needsPermission('admin.write'), 
@@ -480,28 +475,6 @@ class HttpApiHandler {
         }
     }
     
-    static async reopenCommissioning(RED, req, res) {
-        const targetNode = RED.nodes.getNode(req.params.id);
-        if (!targetNode?.matterServer) {
-            return res.sendStatus(404);
-        }
-        
-        try {
-            const adminBehavior = targetNode.matterServer.behaviors?.administratorCommissioning;
-            
-            if (adminBehavior?.openCommissioningWindow) {
-                await adminBehavior.openCommissioningWindow({
-                    commissioningTimeout: 900, // 15 minutes
-                    discriminator: targetNode.bridgeConfig.discriminator
-                });
-            }
-            
-            const data = await this.generatePairingData(targetNode);
-            res.json(data);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    }
     
     static getNetworkInterfaces(req, res) {
         const interfaces = os.networkInterfaces();

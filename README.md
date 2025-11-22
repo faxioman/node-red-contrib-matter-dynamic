@@ -50,6 +50,55 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 2. Add new device
 3. Scan QR code from bridge or enter manual pairing code
 
+### 4. Multi-Admin Support (NEW!)
+
+Matter supports **Multi-Admin**, allowing you to add the same devices to multiple ecosystems simultaneously (HomeKit + Alexa + Google Home + SmartThings, etc.).
+
+#### How to add to multiple controllers:
+
+**First Controller (e.g., HomeKit):**
+1. Scan the QR code or enter manual code as usual
+2. Complete the pairing process
+
+**Additional Controllers (e.g., Alexa):**
+
+**From HomeKit:**
+1. Long press the bridge in the Home app
+2. Tap the Settings icon (gear)
+3. Select "Turn On Pairing Mode"
+4. Copy the code shown
+5. Use this code in Google Home or Alexa
+
+**From Google Home:**
+1. Open device settings
+2. Tap "Linked Matter apps & services"
+3. Select "Link apps"
+4. Copy the setup code
+5. Use this code in HomeKit or Alexa
+
+**From Alexa:**
+1. Go to device settings
+2. Select "Other assistants & apps"
+3. Enable pairing mode
+4. Note the pairing code
+5. Use this code in HomeKit or Google Home
+
+**Important:**
+The bridge can be connected to all three ecosystems simultaneously. Multi-admin pairing must be initiated from an existing controller for security reasons - the Matter specification doesn't allow devices to autonomously open new commissioning windows after initial pairing.
+
+#### Benefits of Multi-Admin:
+- ✅ **Local control** from all ecosystems - no cloud dependency
+- ✅ **Simultaneous access** - use Siri, Alexa, and Google Assistant
+- ✅ **Ecosystem features** - leverage unique features from each platform
+- ✅ **Redundancy** - if one hub fails, others continue working
+- ✅ **Family flexibility** - different family members can use their preferred app
+
+#### Technical Details:
+- Each controller creates its own "Fabric" in the Matter network
+- Devices can belong to multiple Fabrics simultaneously (up to 5 typically)
+- All controllers communicate locally with the device
+- No performance impact from multiple controllers
+
 ## Configuration Examples
 
 ### Simple Light

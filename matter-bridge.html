@@ -127,41 +127,23 @@
             // Store current value
             $("#node-config-input-networkInterface").data('current', this.networkInterface);
             
-            // Load QR code if node exists
+            // Load QR code if node exists (simplified - only show if not commissioned)
             if (node.id) {
-                $.getJSON('_matterbridge/commissioning/' + node.id, function(data) {
-                    if (data.state === 'ready') {
+                $.getJSON('_matterbridge/qrcode/' + node.id, function(data) {
+                    if (data.qrCode && !data.commissioned) {
                         if (data.qrSvg) {
                             $("#matter-qr-code").html(data.qrSvg);
                         } else {
-                            $("#matter-qr-code").text(data.qrPairingCode);
+                            $("#matter-qr-code").html('<pre style="font-family: monospace; font-size: 6px; line-height: 1;">' + data.qrCode + '</pre>');
                         }
-                        $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
-                        $("#matter-reopen-btn").hide();
+                        $("#matter-manual-code").text("Manual Code: " + data.manualCode);
                         $("#matter-qr-container").show();
-                    } else if (data.state === 'commissioned') {
-                        $("#matter-qr-code").text("Device already commissioned");
-                        $("#matter-manual-code").text("");
-                        $("#matter-reopen-btn").show();
-                        $("#matter-qr-container").show();
+                    } else if (data.commissioned) {
+                        $("#matter-commissioned-info").show();
+                        $("#matter-qr-container").hide();
                     }
                 }).fail(function() {
                     $("#matter-qr-container").hide();
-                });
-                
-                // Reopen commissioning button
-                $("#matter-reopen-btn").click(function() {
-                    $.getJSON('_matterbridge/reopen/' + node.id, function(data) {
-                        if (data.state === 'ready') {
-                            if (data.qrSvg) {
-                                $("#matter-qr-code").html(data.qrSvg);
-                            } else {
-                                $("#matter-qr-code").text(data.qrPairingCode);
-                            }
-                            $("#matter-manual-code").text("Manual Code: " + data.manualPairingCode);
-                            $("#matter-reopen-btn").hide();
-                        }
-                    });
                 });
             }
         }
@@ -172,8 +154,21 @@
     <div id="matter-qr-container" style="text-align: center; padding: 10px; display: none;">
         <h3>Matter Pairing Code</h3>
         <div id="matter-qr-code" style="text-align: center; margin: 10px 0;"></div>
-        <div id="matter-manual-code" style="margin-top: 10px; font-size: 16px; font-weight: bold;"></div>
-        <button id="matter-reopen-btn" class="red-ui-button" style="margin-top: 10px; display: none;">Reopen Commissioning</button>
+        <div id="matter-manual-code" style="margin-top: 10px;"></div>
+    </div>
+    
+    <div id="matter-commissioned-info" style="display: none; background: #e8f4f8; border: 1px solid #bee5eb; border-radius: 8px; padding: 20px; margin: 10px 0;">
+        <h3 style="margin-top: 0; color: #0c5460; text-align: center;">Device Commissioned</h3>
+        <p style="color: #0c5460; margin-bottom: 15px; text-align: center;">This bridge is already paired with a Matter controller.</p>
+        <div style="background: white; border-radius: 6px; padding: 15px;">
+            <p style="margin-top: 0; font-weight: bold; color: #333;">To add to another ecosystem:</p>
+            <ol style="margin: 10px 0 0 0; padding-left: 25px; color: #555;">
+                <li style="margin-bottom: 8px;">Open the existing controller app (e.g., Apple Home)</li>
+                <li style="margin-bottom: 8px;">Find this bridge device</li>
+                <li style="margin-bottom: 8px;">Use "Turn On Pairing Mode" or similar option</li>
+                <li style="margin-bottom: 0;">Pair with the new controller</li>
+            </ol>
+        </div>
     </div>
     
     <div class="form-row">
@@ -256,4 +251,13 @@
     
     <h3>Details</h3>
     <p>This node creates a Matter bridge that can host multiple dynamic Matter devices.</p>
+    
+    <h3>Multi-Admin Support</h3>
+    <p>The bridge supports Matter Multi-Admin, allowing you to connect it to multiple ecosystems simultaneously:</p>
+    <ul>
+        <li><b>First pairing:</b> Use the QR code shown when the bridge starts</li>
+        <li><b>Additional pairings:</b> Use your existing controller (HomeKit, Alexa, etc.) to enable pairing mode</li>
+        <li>You can pair with HomeKit, Alexa, Google Home, SmartThings, and other Matter controllers</li>
+        <li>All controllers will have local access to your devices</li>
+    </ul>
 </script>
