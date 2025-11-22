@@ -1,7 +1,7 @@
 <script type="text/javascript">
     RED.nodes.registerType('matter-device', {
         category: 'Matter',
-        color: '#a6bbcf',
+        color: '#ffffff',
         defaults: {
             name: {value: ""},
             bridge: {type: "matter-dynamic-bridge", required: true},
@@ -18,7 +18,7 @@
         inputs: 1,
         outputs: 2,
         outputLabels: ["events", "commands"],
-        icon: "bridge.png",
+        icon: "icons/matter-device-icon.svg",
         label: function() {
             return this.name || "Matter Device";
         },
