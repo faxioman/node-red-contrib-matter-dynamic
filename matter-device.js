@@ -419,6 +419,19 @@ module.exports = function(RED) {
         node.autoConfirm = /^true$/i.test(config.autoConfirm);
         node.deviceInitFailed = false;
         
+        // Device initialization promise
+        node.initPromise = new Promise((resolve, reject) => {
+            node.resolveInit = resolve;
+            node.rejectInit = (error) => {
+                // Don't reject if already resolved or during normal cleanup
+                try {
+                    reject(error);
+                } catch (e) {
+                    // Promise already settled, ignore
+                }
+            };
+        });
+        
         // Parse device configuration
         let deviceConfig;
         try {
@@ -520,31 +533,30 @@ module.exports = function(RED) {
         // ====================================================================
         
         this.on('input', async function(msg) {
-            if (!node.device?.state) {
-                node.error("Device not ready");
-                return;
-            }
-            
-            // Handle state query
-            if (msg.topic === 'state') {
-                msg.payload = {};
-                Object.keys(node.device.state).forEach(cluster => {
-                    msg.payload[cluster] = {...node.device.state[cluster]};
-                });
-                node.send(msg);
-                return;
-            }
-            
-            // Handle attribute updates
-            if (msg.payload && typeof msg.payload === 'object') {
-                node.log(`Setting device state: ${JSON.stringify(msg.payload)}`);
+            try {
+                // Wait for device initialization
+                await node.initPromise;
                 
-                try {
-                    await node.device.set(msg.payload);
-                    node.log("Device updated successfully");
-                } catch (err) {
-                    node.error(`Failed to update: ${err.message}`);
+                // Handle state query
+                if (msg.topic === 'state') {
+                    msg.payload = {};
+                    Object.keys(node.device.state).forEach(cluster => {
+                        msg.payload[cluster] = {...node.device.state[cluster]};
+                    });
+                    node.send(msg);
+                    return;
                 }
+                
+                // Handle attribute updates
+                if (msg.payload && typeof msg.payload === 'object') {
+                    try {
+                        await node.device.set(msg.payload);
+                    } catch (err) {
+                        node.error(`Failed to update: ${err.message}`);
+                    }
+                }
+            } catch (err) {
+                node.error(`Device initialization failed: ${err.message}`);
             }
         });
         
@@ -567,7 +579,7 @@ module.exports = function(RED) {
             node.log(`Device events available: ${!!node.device.events}`);
             
             // Check device initialization after a delay
-            setTimeout(() => {
+            setTimeout(async () => {
                 if (node.deviceInitFailed) return;
                 
                 try {
@@ -584,6 +596,7 @@ module.exports = function(RED) {
                     // Set ready status if successful
                     if (!node.deviceInitFailed) {
                         node.status({fill:"green", shape:"dot", text:"ready"});
+                        node.resolveInit();
                     }
                 } catch (err) {
                     node.error(`Device not properly initialized: ${err.message}`);
@@ -597,6 +610,7 @@ module.exports = function(RED) {
             node.error(`Device validation failed: ${errorMsg}`);
             node.deviceInitFailed = true;
             node.status({fill:"red", shape:"ring", text:"validation error"});
+            node.rejectInit(new Error(errorMsg));
             if (node.statusTimer) {
                 clearTimeout(node.statusTimer);
             }
