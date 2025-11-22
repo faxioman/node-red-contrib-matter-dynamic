@@ -30,61 +30,6 @@
                 value: this.deviceConfig
             });
 
-            // Example configurations
-            const examples = {
-                "OnOffLight": {
-                    "deviceType": "OnOffLightDevice"
-                },
-                "DimmableLight": {
-                    "deviceType": "DimmableLightDevice"
-                },
-                "ColorTemperatureLight": {
-                    "deviceType": "ColorTemperatureLightDevice",
-                    "additionalBehaviors": ["ColorControlServer"],
-                    "initialState": {
-                        "colorControl": {
-                            "colorMode": 2
-                        }
-                    }
-                },
-                "ContactSensor": {
-                    "deviceType": "ContactSensorDevice"
-                },
-                "TemperatureSensor": {
-                    "deviceType": "TemperatureSensorDevice"
-                },
-                "GenericSwitch": {
-                    "deviceType": "GenericSwitchDevice"
-                },
-                "WindowCovering": {
-                    "deviceType": "WindowCoveringDevice"
-                },
-                "Thermostat": {
-                    "deviceType": "ThermostatDevice",
-                    "initialState": {
-                        "thermostat": {
-                            "systemMode": 0,
-                            "controlSequenceOfOperation": 0
-                        }
-                    }
-                }
-            };
-
-            // Populate examples dropdown
-            $("#node-input-example").empty();
-            $("#node-input-example").append('<option value="">Select example...</option>');
-            Object.keys(examples).forEach(function(key) {
-                $("#node-input-example").append('<option value="' + key + '">' + key + '</option>');
-            });
-
-            // Handle example selection
-            $("#node-input-example").change(function() {
-                var selected = $(this).val();
-                if (selected && examples[selected]) {
-                    var exampleConfig = JSON.stringify(examples[selected], null, 2);
-                    RED.nodes.node($("#node-input-deviceConfig-editor").data("node-id")).configEditor.setValue(exampleConfig);
-                }
-            });
         },
         oneditsave: function() {
             this.deviceConfig = this.configEditor.getValue();
@@ -113,13 +58,6 @@
         <label for="node-input-autoConfirm"><i class="fa fa-check-circle"></i> Auto Confirm</label>
         <input type="checkbox" id="node-input-autoConfirm" style="display: inline-block; width: auto; vertical-align: top;">
         <span style="margin-left: 10px; color: #999;">Automatically confirm command execution</span>
-    </div>
-
-    <div class="form-row">
-        <label for="node-input-example"><i class="fa fa-list"></i> Examples</label>
-        <select id="node-input-example" style="width:70%;">
-            <option value="">Select example...</option>
-        </select>
     </div>
 
     <div class="form-row">
