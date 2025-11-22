@@ -5,7 +5,7 @@
         defaults: {
             name: {value: ""},
             bridge: {type: "matter-dynamic-bridge", required: true},
-            passthrough: {value: false},
+            autoConfirm: {value: false},
             deviceConfig: {value: "{\n  \"deviceType\": \"OnOffLightDevice\"\n}", validate: function(v) {
                 try {
                     JSON.parse(v);
@@ -110,8 +110,9 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-passthrough"><i class="fa fa-arrow-right"></i> Pass Through</label>
-        <input type="checkbox" id="node-input-passthrough" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-autoConfirm"><i class="fa fa-check-circle"></i> Auto Confirm</label>
+        <input type="checkbox" id="node-input-autoConfirm" style="display: inline-block; width: auto; vertical-align: top;">
+        <span style="margin-left: 10px; color: #999;">Automatically confirm command execution</span>
     </div>
 
     <div class="form-row">
@@ -153,13 +154,27 @@
     </dl>
 
     <h3>Outputs</h3>
+    <p><b>Output 1: State changes</b></p>
     <dl class="message-properties">
         <dt>payload <span class="property-type">object</span></dt>
         <dd>State changes in same format as input</dd>
-
-        <dt>oldValue <span class="property-type">object</span></dt>
-        <dd>Previous value (if available)</dd>
+        <dt>eventSource <span class="property-type">object</span></dt>
+        <dd>Source of the state change (local or network)</dd>
     </dl>
+
+    <p><b>Output 2: Commands</b></p>
+    <dl class="message-properties">
+        <dt>payload.command <span class="property-type">string</span></dt>
+        <dd>Command name (e.g., "on", "off", "toggle")</dd>
+        <dt>payload.cluster <span class="property-type">string</span></dt>
+        <dd>Cluster name (e.g., "OnOff")</dd>
+        <dt>payload.data <span class="property-type">object</span></dt>
+        <dd>Command parameters</dd>
+    </dl>
+
+    <h3>Auto Confirm</h3>
+    <p>When enabled, commands are automatically confirmed, preventing timeout issues with HomeKit/Alexa.
+    When disabled, you must manually send the state back to the input after executing the command on the real device.</p>
 
     <h3>Examples</h3>
     <p><b>Turn on a light:</b><br>

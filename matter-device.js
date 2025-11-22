@@ -19,13 +19,30 @@ function patchBehaviors() {
             BehaviorClass.prototype[cmd] = async function(request) {
                 // Send command to Node-RED second output
                 if (this.endpoint?.nodeRed) {
-                    this.endpoint.nodeRed.send([null, {
-                        payload: {
-                            command: cmd,
-                            cluster: BehaviorClass.cluster.name,
-                            data: request
+                    const payload = {
+                        command: cmd,
+                        cluster: BehaviorClass.cluster.name,
+                        data: request
+                    };
+                    
+                    this.endpoint.nodeRed.send([null, { payload }]);
+                    
+                    // Auto-confirm command if enabled
+                    if (this.endpoint.nodeRed.autoConfirm) {
+                        // Build confirmation state based on command
+                        const confirmState = this.endpoint.nodeRed.buildAutoConfirmState(cmd, BehaviorClass.cluster.name, request);
+                        if (confirmState) {
+                            // Schedule confirmation after a short delay to allow command to be processed
+                            setTimeout(() => {
+                                if (this.endpoint?.nodeRed) {
+                                    this.endpoint.nodeRed.log(`Auto-confirming command: ${cmd}`);
+                                    this.endpoint.set(confirmState).catch(err => {
+                                        this.endpoint.nodeRed.error(`Failed to auto-confirm: ${err.message}`);
+                                    });
+                                }
+                            }, 50);
                         }
-                    }]);
+                    }
                 }
                 
                 // Execute original method if exists and is implemented
@@ -399,7 +416,7 @@ module.exports = function(RED) {
         node.bridge = RED.nodes.getNode(config.bridge);
         node.name = config.name;
         node.type = 'matter-device';
-        node.passthrough = /^true$/i.test(config.passthrough);
+        node.autoConfirm = /^true$/i.test(config.autoConfirm);
         node.deviceInitFailed = false;
         
         // Parse device configuration
@@ -418,6 +435,85 @@ module.exports = function(RED) {
         
         // Initialize event manager
         const eventManager = new EventManager(node);
+        
+        // Build auto-confirm state based on command
+        node.buildAutoConfirmState = function(cmd, clusterName, request) {
+            const state = {};
+            
+            // Handle OnOff commands
+            if (clusterName === 'OnOff') {
+                if (cmd === 'on') {
+                    state.onOff = { onOff: true };
+                } else if (cmd === 'off') {
+                    state.onOff = { onOff: false };
+                } else if (cmd === 'toggle' && node.device?.state?.onOff) {
+                    state.onOff = { onOff: !node.device.state.onOff.onOff };
+                }
+            }
+            
+            // Handle LevelControl commands
+            if (clusterName === 'LevelControl' && request) {
+                if ((cmd === 'moveToLevel' || cmd === 'moveToLevelWithOnOff') && request.level !== undefined) {
+                    state.levelControl = { currentLevel: request.level };
+                    if (cmd === 'moveToLevelWithOnOff') {
+                        state.onOff = { onOff: request.level > 0 };
+                    }
+                }
+            }
+            
+            // Handle ColorControl commands
+            if (clusterName === 'ColorControl' && request) {
+                if (cmd === 'moveToColorTemperature' && request.colorTemperatureMireds !== undefined) {
+                    state.colorControl = {
+                        colorTemperatureMireds: request.colorTemperatureMireds,
+                        colorMode: 2 // ColorTemperatureMireds mode
+                    };
+                } else if (cmd === 'moveToHueAndSaturation' && request.hue !== undefined && request.saturation !== undefined) {
+                    state.colorControl = {
+                        currentHue: request.hue,
+                        currentSaturation: request.saturation,
+                        colorMode: 0 // CurrentHueAndCurrentSaturation mode
+                    };
+                }
+            }
+            
+            // Handle WindowCovering commands
+            if (clusterName === 'WindowCovering') {
+                if (cmd === 'upOrOpen') {
+                    state.windowCovering = {
+                        currentPositionLiftPercent100ths: 0,
+                        targetPositionLiftPercent100ths: 0
+                    };
+                } else if (cmd === 'downOrClose') {
+                    state.windowCovering = {
+                        currentPositionLiftPercent100ths: 10000,
+                        targetPositionLiftPercent100ths: 10000
+                    };
+                } else if (cmd === 'stopMotion' && node.device?.state?.windowCovering) {
+                    const currentPos = node.device.state.windowCovering.currentPositionLiftPercent100ths || 0;
+                    state.windowCovering = {
+                        currentPositionLiftPercent100ths: currentPos,
+                        targetPositionLiftPercent100ths: currentPos
+                    };
+                } else if (cmd === 'goToLiftPercentage' && request.liftPercent100thsValue !== undefined) {
+                    state.windowCovering = {
+                        currentPositionLiftPercent100ths: request.liftPercent100thsValue,
+                        targetPositionLiftPercent100ths: request.liftPercent100thsValue
+                    };
+                }
+            }
+            
+            // Handle DoorLock commands
+            if (clusterName === 'DoorLock') {
+                if (cmd === 'lockDoor') {
+                    state.doorLock = { lockState: 1 }; // Locked
+                } else if (cmd === 'unlockDoor') {
+                    state.doorLock = { lockState: 2 }; // Unlocked
+                }
+            }
+            
+            return Object.keys(state).length > 0 ? state : null;
+        };
         
         // ====================================================================
         // INPUT MESSAGE HANDLER
@@ -446,9 +542,6 @@ module.exports = function(RED) {
                 try {
                     await node.device.set(msg.payload);
                     node.log("Device updated successfully");
-                    if (node.passthrough) {
-                        node.send(msg);
-                    }
                 } catch (err) {
                     node.error(`Failed to update: ${err.message}`);
                 }
