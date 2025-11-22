@@ -1,313 +1,640 @@
 const { Endpoint, Environment, ServerNode, Logger, VendorId, StorageService } = require("@matter/main");
 const { AggregatorEndpoint } = require("@matter/main/endpoints");
-const { AdministratorCommissioning } = require("@matter/main/behaviors");
 const { NetworkCommissioning } = require("@matter/main/clusters");
 const { NetworkCommissioningServer } = require("@matter/main/behaviors");
 const os = require('os');
 const QRCode = require('qrcode');
 
-function genPasscode() {
-    let x = Math.floor(Math.random() * (99999998 - 1) + 1);
-    const invalid = [11111111, 22222222, 33333333, 44444444, 55555555, 66666666, 77777777, 88888888, 12345678, 87654321];
-    if (invalid.includes(x)) {
-        x += 1;
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Generate a valid Matter passcode
+ */
+function generatePasscode() {
+    let passcode = Math.floor(Math.random() * 99999997) + 1;
+    const invalidCodes = [
+        11111111, 22222222, 33333333, 44444444, 55555555, 
+        66666666, 77777777, 88888888, 12345678, 87654321
+    ];
+    
+    if (invalidCodes.includes(passcode)) {
+        passcode += 1;
     }
-    return +x.toString().padStart(8, '0');
+    
+    return +passcode.toString().padStart(8, '0');
 }
+
+/**
+ * Generate a random discriminator (0-4095)
+ */
+function generateDiscriminator() {
+    return Math.floor(Math.random() * 4095);
+}
+
+// ============================================================================
+// BRIDGE CONFIGURATION
+// ============================================================================
+
+class BridgeConfig {
+    constructor(config) {
+        this.name = config.name || "Matter Bridge";
+        this.vendorId = +config.vendorId || 65521;
+        this.productId = +config.productId || 32768;
+        this.vendorName = config.vendorName || "Node-RED";
+        this.productName = config.productName || "Dynamic Matter Bridge";
+        this.networkInterface = config.networkInterface || "";
+        this.storageLocation = config.storageLocation || "";
+        this.port = config.port || 5540;
+        this.logLevel = config.logLevel || "WARN";
+        this.passcode = generatePasscode();
+        this.discriminator = generateDiscriminator();
+    }
+    
+    /**
+     * Apply log level configuration
+     */
+    static setLogLevel(level) {
+        const logLevels = {
+            "FATAL": 5,
+            "ERROR": 4,
+            "WARN": 3,
+            "INFO": 1,
+            "DEBUG": 0
+        };
+        
+        if (level in logLevels) {
+            Logger.defaultLogLevel = logLevels[level];
+        }
+    }
+}
+
+// ============================================================================
+// DEVICE MANAGER
+// ============================================================================
+
+class DeviceManager {
+    constructor(node) {
+        this.node = node;
+        this.registered = [];
+        this.pendingUsers = [];
+        this.failedDevices = new Set();
+    }
+    
+    /**
+     * Register a child device with the bridge
+     */
+    registerChild(child) {
+        this.node.log(`Registering device ${child.id}`);
+        
+        // Check if already registered
+        if (this.registered.find(c => c.id === child.id)) {
+            this.node.warn(`Device ${child.id} already registered, skipping`);
+            return;
+        }
+        
+        // Remove from pending users
+        const index = this.pendingUsers.indexOf(child.id);
+        if (index > -1) {
+            this.pendingUsers.splice(index, 1);
+        }
+        
+        this.registered.push(child);
+        
+        // Add device to aggregator
+        this.addToAggregator(child);
+        
+        // Start server when all devices registered
+        if (this.pendingUsers.length === 0 && this.node.serverReady) {
+            this.node.serverManager.start();
+        }
+    }
+    
+    /**
+     * Add device to Matter aggregator
+     */
+    addToAggregator(child) {
+        const deviceId = child.id.replace(/-/g, '');
+        
+        if (!this.node.aggregator) {
+            this.node.error("Aggregator not ready");
+            return;
+        }
+        
+        if (this.node.aggregator.parts.has(deviceId)) {
+            this.node.log(`Device ${deviceId} already in aggregator`);
+            return;
+        }
+        
+        try {
+            this.node.aggregator.add(child.device);
+            this.node.log(`Added device ${deviceId} to aggregator`);
+            child.deviceAddedSuccessfully = true;
+        } catch (error) {
+            this.handleDeviceError(child, error);
+        }
+    }
+    
+    /**
+     * Handle device initialization error
+     */
+    handleDeviceError(child, error) {
+        this.node.error(`Failed to add device ${child.id}: ${error.message}`);
+        child.error(`Device initialization failed: ${error.message}`);
+        child.status({fill:"red", shape:"ring", text:"init failed"});
+        child.deviceAddedSuccessfully = false;
+        this.failedDevices.add(child.id);
+    }
+    
+    /**
+     * Notify all registered devices that server is ready
+     */
+    notifyDevicesReady() {
+        setTimeout(() => {
+            this.registered.forEach(child => {
+                if (this.failedDevices.has(child.id) || child.deviceInitFailed) {
+                    return;
+                }
+                
+                try {
+                    if (child.device?.state) {
+                        // Test device accessibility
+                        const test = Object.keys(child.device.state);
+                        child.emit('serverReady');
+                    } else {
+                        child.error("Device not properly initialized");
+                        child.status({fill:"red", shape:"ring", text:"init failed"});
+                    }
+                } catch (err) {
+                    child.error(`Device validation check failed: ${err.message}`);
+                    child.status({fill:"red", shape:"ring", text:"validation failed"});
+                    this.failedDevices.add(child.id);
+                }
+            });
+        }, 3000);
+    }
+}
+
+// ============================================================================
+// SERVER MANAGER
+// ============================================================================
+
+class ServerManager {
+    constructor(node) {
+        this.node = node;
+    }
+    
+    /**
+     * Create and configure Matter server
+     */
+    async create() {
+        // Configure environment
+        this.configureEnvironment();
+        
+        // Create server configuration
+        const serverConfig = this.createServerConfig();
+        
+        try {
+            const matterServer = await ServerNode.create(
+                ServerNode.RootEndpoint.with(
+                    NetworkCommissioningServer.with("EthernetNetworkInterface")
+                ),
+                serverConfig
+            );
+            
+            this.node.matterServer = matterServer;
+            this.node.aggregator = new Endpoint(AggregatorEndpoint, { id: "aggregator" });
+            this.node.matterServer.add(this.node.aggregator);
+            
+            this.node.log("Bridge created");
+            this.node.serverReady = true;
+            
+            // Start if no child nodes configured
+            if (this.node.deviceManager.pendingUsers.length === 0) {
+                this.start();
+            }
+        } catch (err) {
+            this.node.error("Failed to create Matter server: " + err.message);
+        }
+    }
+    
+    /**
+     * Configure Matter environment settings
+     */
+    configureEnvironment() {
+        const config = this.node.bridgeConfig;
+        
+        if (config.networkInterface) {
+            Environment.default.vars.set('mdns.networkInterface', config.networkInterface);
+        }
+        
+        if (config.storageLocation) {
+            const storageService = Environment.default.get(StorageService);
+            storageService.location = config.storageLocation;
+            Environment.default.set(StorageService, storageService);
+            this.node.log(`Using custom storage: ${storageService.location}`);
+        }
+    }
+    
+    /**
+     * Create server configuration object
+     */
+    createServerConfig() {
+        const config = this.node.bridgeConfig;
+        const networkId = new Uint8Array(32);
+        
+        return {
+            id: this.node.id,
+            network: {
+                port: config.port,
+            },
+            commissioning: {
+                passcode: config.passcode,
+                discriminator: config.discriminator
+            },
+            productDescription: {
+                name: config.name,
+                deviceType: AggregatorEndpoint.deviceType,
+            },
+            basicInformation: {
+                vendorName: config.vendorName,
+                vendorId: VendorId(config.vendorId),
+                nodeLabel: config.name,
+                productName: config.productName,
+                productLabel: config.name,
+                productId: config.productId,
+                serialNumber: this.node.id.replace(/-/g, ''),
+                uniqueId: this.node.id.replace(/-/g, '').split("").reverse().join(""),
+                hardwareVersion: 1,
+                softwareVersion: 1
+            },
+            networkCommissioning: {
+                maxNetworks: 1,
+                interfaceEnabled: true,
+                lastConnectErrorValue: 0,
+                lastNetworkId: networkId,
+                lastNetworkingStatus: NetworkCommissioning.NetworkCommissioningStatus.Success,
+                networks: [{ networkId: networkId, connected: true }],
+            }
+        };
+    }
+    
+    /**
+     * Start Matter server
+     */
+    async start() {
+        if (!this.node.serverReady || !this.node.matterServer) {
+            return;
+        }
+        
+        if (this.node.matterServer.lifecycle.isOnline) {
+            // Server already running
+            this.node.deviceManager.notifyDevicesReady();
+            return;
+        }
+        
+        this.node.log('Starting Matter server...');
+        
+        try {
+            await this.node.matterServer.start();
+            this.node.log('Matter server started');
+            
+            this.updateNodeStatus();
+            this.node.deviceManager.notifyDevicesReady();
+        } catch (err) {
+            this.node.error('Failed to start server: ' + err.message);
+        }
+    }
+    
+    /**
+     * Update node status based on commissioning state
+     */
+    updateNodeStatus() {
+        if (!this.node.matterServer.lifecycle.isCommissioned) {
+            const pairingData = this.node.matterServer.state.commissioning.pairingCodes;
+            
+            this.node.status({
+                fill: "blue",
+                shape: "dot",
+                text: `QR: ${pairingData.manualPairingCode}`
+            });
+            
+            // Store QR data for display
+            this.node.qrCode = pairingData.qrPairingCode;
+            this.node.manualCode = pairingData.manualPairingCode;
+        } else {
+            this.node.status({
+                fill: "green",
+                shape: "dot",
+                text: "commissioned"
+            });
+        }
+    }
+}
+
+// ============================================================================
+// ERROR HANDLER
+// ============================================================================
+
+class ErrorHandler {
+    constructor(node) {
+        this.node = node;
+        this.handler = this.handleUnhandledRejection.bind(this);
+        process.on('unhandledRejection', this.handler);
+    }
+    
+    /**
+     * Handle unhandled Matter.js initialization errors
+     */
+    handleUnhandledRejection(reason, promise) {
+        if (!reason?.message?.includes('Behaviors have errors')) {
+            return;
+        }
+        
+        this.node.error(`Matter.js initialization error: ${reason.message}`);
+        
+        // Extract detailed error information
+        if (reason.errors?.length > 0) {
+            reason.errors.forEach(err => {
+                if (err.cause) {
+                    this.node.error(`Device validation error: ${err.cause.message}`);
+                }
+            });
+        }
+        
+        // Find which device failed
+        const errorStr = reason.toString();
+        const deviceMatch = errorStr.match(/Error initializing ([a-f0-9]+)\.aggregator\.([a-f0-9]+)/);
+        
+        if (deviceMatch?.[2]) {
+            this.handleFailedDevice(deviceMatch[2], errorStr);
+        }
+    }
+    
+    /**
+     * Handle a failed device initialization
+     */
+    handleFailedDevice(failedDeviceId, errorStr) {
+        const failedChild = this.node.deviceManager.registered.find(child => 
+            child.id.replace(/-/g, '') === failedDeviceId
+        );
+        
+        if (!failedChild) return;
+        
+        const validationMatch = errorStr.match(/Validating [^:]+: (.+)/);
+        const errorMsg = validationMatch?.[1] || 'Missing mandatory attributes';
+        
+        failedChild.error(`Device initialization failed: ${errorMsg}`);
+        failedChild.status({fill:"red", shape:"ring", text:"validation error"});
+        failedChild.deviceInitFailed = true;
+        failedChild.eventsSubscribed = true; // Prevent future subscription attempts
+        
+        this.node.deviceManager.failedDevices.add(failedChild.id);
+        
+        // Emit failure event
+        failedChild.emit('deviceInitFailed', errorMsg);
+        failedChild.removeAllListeners('serverReady');
+        
+        // Try to clean up from aggregator
+        this.cleanupFailedDevice(failedDeviceId);
+    }
+    
+    /**
+     * Clean up failed device from aggregator
+     */
+    cleanupFailedDevice(deviceId) {
+        try {
+            if (this.node.aggregator?.parts.has(deviceId)) {
+                this.node.aggregator.parts.delete(deviceId);
+            }
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+    }
+    
+    /**
+     * Clean up error handler
+     */
+    cleanup() {
+        process.removeListener('unhandledRejection', this.handler);
+    }
+}
+
+// ============================================================================
+// HTTP API HANDLER
+// ============================================================================
+
+class HttpApiHandler {
+    static setupEndpoints(RED) {
+        // Get QR code endpoint
+        RED.httpAdmin.get('/_matterbridge/qrcode/:id', 
+            RED.auth.needsPermission('admin.write'), 
+            this.getQrCode.bind(this, RED)
+        );
+        
+        // Get commissioning info
+        RED.httpAdmin.get('/_matterbridge/commissioning/:id', 
+            RED.auth.needsPermission('admin.write'), 
+            this.getCommissioningInfo.bind(this, RED)
+        );
+        
+        // Reopen commissioning window
+        RED.httpAdmin.get('/_matterbridge/reopen/:id', 
+            RED.auth.needsPermission('admin.write'), 
+            this.reopenCommissioning.bind(this, RED)
+        );
+        
+        // Get network interfaces
+        RED.httpAdmin.get('/_matterbridge/interfaces', 
+            RED.auth.needsPermission('admin.write'), 
+            this.getNetworkInterfaces.bind(this)
+        );
+    }
+    
+    static async getQrCode(RED, req, res) {
+        const targetNode = RED.nodes.getNode(req.params.id);
+        if (!targetNode) {
+            return res.json({ error: "Bridge not found" });
+        }
+        
+        try {
+            const data = await this.getQrCodeData(targetNode);
+            res.json(data);
+        } catch (err) {
+            res.json({ error: err.message });
+        }
+    }
+    
+    static async getCommissioningInfo(RED, req, res) {
+        const targetNode = RED.nodes.getNode(req.params.id);
+        if (!targetNode?.matterServer) {
+            return res.sendStatus(404);
+        }
+        
+        if (!targetNode.matterServer.lifecycle.isCommissioned) {
+            const data = await this.generatePairingData(targetNode);
+            res.json(data);
+        } else {
+            res.json({ state: 'commissioned' });
+        }
+    }
+    
+    static async reopenCommissioning(RED, req, res) {
+        const targetNode = RED.nodes.getNode(req.params.id);
+        if (!targetNode?.matterServer) {
+            return res.sendStatus(404);
+        }
+        
+        try {
+            const adminBehavior = targetNode.matterServer.behaviors?.administratorCommissioning;
+            
+            if (adminBehavior?.openCommissioningWindow) {
+                await adminBehavior.openCommissioningWindow({
+                    commissioningTimeout: 900, // 15 minutes
+                    discriminator: targetNode.bridgeConfig.discriminator
+                });
+            }
+            
+            const data = await this.generatePairingData(targetNode);
+            res.json(data);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+    
+    static getNetworkInterfaces(req, res) {
+        const interfaces = os.networkInterfaces();
+        const output = [];
+        
+        for (const iface in interfaces) {
+            for (const addr of interfaces[iface]) {
+                if (!addr.internal && addr.family === "IPv6") {
+                    output.push(iface);
+                    break;
+                }
+            }
+        }
+        
+        res.json([...new Set(output)]);
+    }
+    
+    static async getQrCodeData(node) {
+        if (node.qrCode) {
+            return await this.formatQrResponse(
+                node.qrCode, 
+                node.manualCode,
+                node.matterServer?.lifecycle?.isCommissioned
+            );
+        }
+        
+        if (node.matterServer && !node.matterServer.lifecycle.isCommissioned) {
+            const pairingData = node.matterServer.state.commissioning.pairingCodes;
+            return await this.formatQrResponse(
+                pairingData.qrPairingCode,
+                pairingData.manualPairingCode,
+                false
+            );
+        }
+        
+        return { commissioned: true };
+    }
+    
+    static async generatePairingData(node) {
+        const pairingData = node.matterServer.state.commissioning.pairingCodes;
+        
+        try {
+            const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
+                type: 'svg',
+                width: 200,
+                margin: 1
+            });
+            
+            return {
+                state: 'ready',
+                qrPairingCode: pairingData.qrPairingCode,
+                qrSvg: qrSvg,
+                manualPairingCode: pairingData.manualPairingCode
+            };
+        } catch (err) {
+            return {
+                state: 'ready',
+                qrPairingCode: pairingData.qrPairingCode,
+                manualPairingCode: pairingData.manualPairingCode
+            };
+        }
+    }
+    
+    static async formatQrResponse(qrCode, manualCode, commissioned = false) {
+        try {
+            const qrSvg = await QRCode.toString(qrCode, {
+                type: 'svg',
+                width: 200,
+                margin: 1
+            });
+            
+            return {
+                qrCode,
+                qrSvg,
+                manualCode,
+                commissioned
+            };
+        } catch (err) {
+            return {
+                qrCode,
+                manualCode,
+                commissioned
+            };
+        }
+    }
+}
+
+// ============================================================================
+// MAIN NODE DEFINITION
+// ============================================================================
 
 module.exports = function(RED) {
     function MatterDynamicBridge(config) {
         RED.nodes.createNode(this, config);
-        var node = this;
+        const node = this;
         
-        // Catch unhandled Matter.js errors
-        const unhandledRejectionHandler = (reason, promise) => {
-            if (reason && reason.message && reason.message.includes('Behaviors have errors')) {
-                node.error(`Matter.js initialization error: ${reason.message}`);
-                // Extract detailed error information
-                if (reason.errors && reason.errors.length > 0) {
-                    reason.errors.forEach(err => {
-                        if (err.cause) {
-                            node.error(`Device validation error: ${err.cause.message}`);
-                        }
-                    });
-                }
-                // Find which device failed
-                const errorStr = reason.toString();
-                const deviceMatch = errorStr.match(/Error initializing ([a-f0-9]+)\.aggregator\.([a-f0-9]+)/);
-                if (deviceMatch && deviceMatch[2]) {
-                    const failedDeviceId = deviceMatch[2];
-                    const failedChild = node.registered.find(child => 
-                        child.id.replace(/-/g, '') === failedDeviceId
-                    );
-                    if (failedChild) {
-                        const validationMatch = errorStr.match(/Validating [^:]+: (.+)/);
-                        const errorMsg = validationMatch ? validationMatch[1] : 'Missing mandatory attributes';
-                        failedChild.error(`Device initialization failed: ${errorMsg}`);
-                        failedChild.status({fill:"red", shape:"ring", text:"validation error"});
-                        failedChild.deviceInitFailed = true;
-                        failedChild.eventsSubscribed = true; // Prevent future subscription attempts
-                        node.failedDevices.add(failedChild.id);
-                        
-                        // Emit failure event directly to device
-                        failedChild.emit('deviceInitFailed', errorMsg);
-                        
-                        // Remove all event listeners if any
-                        failedChild.removeAllListeners('serverReady');
-                        
-                        // Remove from aggregator if possible
-                        try {
-                            if (node.aggregator && node.aggregator.parts.has(failedDeviceId)) {
-                                node.aggregator.parts.delete(failedDeviceId);
-                            }
-                        } catch (e) {
-                            // Ignore cleanup errors
-                        }
-                    }
-                }
-                return; // Prevent crash
-            }
-        };
-        
-        process.on('unhandledRejection', unhandledRejectionHandler);
-        
-        // Clean up handler on close
-        node.on('close', (removed, done) => {
-            process.removeListener('unhandledRejection', unhandledRejectionHandler);
-            done();
-        });
-        
-        // Set log level
-        switch (config.logLevel) {
-            case "FATAL": Logger.defaultLogLevel = 5; break;
-            case "ERROR": Logger.defaultLogLevel = 4; break;
-            case "WARN": Logger.defaultLogLevel = 3; break;
-            case "INFO": Logger.defaultLogLevel = 1; break;
-            case "DEBUG": Logger.defaultLogLevel = 0; break;
-        }
+        // Initialize configuration
+        node.bridgeConfig = new BridgeConfig(config);
+        BridgeConfig.setLogLevel(node.bridgeConfig.logLevel);
         
         node.log(`Loading Matter Bridge ${node.id}`);
         
-        // Bridge configuration
-        node.name = config.name || "Matter Bridge";
-        node.vendorId = +config.vendorId || 65521;
-        node.productId = +config.productId || 32768;
-        node.vendorName = config.vendorName || "Node-RED";
-        node.productName = config.productName || "Dynamic Matter Bridge";
-        node.networkInterface = config.networkInterface || "";
-        node.storageLocation = config.storageLocation || "";
-        node.port = config.port || 5540;
-        node.passcode = genPasscode();
-        node.discriminator = +Math.floor(Math.random() * 4095).toString().padStart(4, '0');
+        // Initialize managers
+        node.deviceManager = new DeviceManager(node);
+        node.serverManager = new ServerManager(node);
+        node.errorHandler = new ErrorHandler(node);
         
+        // Initialize state
         node.serverReady = false;
-        node.registered = [];
-        node.users = [];
-        node.failedDevices = new Set(); // Track failed devices
+        node.users = node.deviceManager.pendingUsers;
+        node.registered = node.deviceManager.registered;
         
-        // Child nodes will be added dynamically when they connect
-        
-        // Configure environment
-        if (node.networkInterface) {
-            Environment.default.vars.set('mdns.networkInterface', node.networkInterface);
-        }
-        
-        // Configure storage
-        const environment = Environment.default;
-        let storageService = environment.get(StorageService);
-        if (node.storageLocation) {
-            storageService.location = node.storageLocation;
-            environment.set(StorageService, storageService);
-            node.log(`Using custom storage: ${storageService.location}`);
-        }
+        // Register child device function
+        node.registerChild = node.deviceManager.registerChild.bind(node.deviceManager);
         
         // Create Matter server
-        const networkId = new Uint8Array(32);
+        node.serverManager.create();
         
-        ServerNode.create(
-            ServerNode.RootEndpoint.with(NetworkCommissioningServer.with("EthernetNetworkInterface")),
-            {
-                id: node.id,
-                network: {
-                    port: node.port,
-                },
-                commissioning: {
-                    passcode: node.passcode,
-                    discriminator: node.discriminator
-                },
-                productDescription: {
-                    name: node.name,
-                    deviceType: AggregatorEndpoint.deviceType,
-                },
-                basicInformation: {
-                    vendorName: node.vendorName,
-                    vendorId: VendorId(node.vendorId),
-                    nodeLabel: node.name,
-                    productName: node.productName,
-                    productLabel: node.name,
-                    productId: node.productId,
-                    serialNumber: node.id.replace(/-/g, ''),
-                    uniqueId: node.id.replace(/-/g, '').split("").reverse().join(""),
-                    hardwareVersion: 1,
-                    softwareVersion: 1
-                },
-                networkCommissioning: {
-                    maxNetworks: 1,
-                    interfaceEnabled: true,
-                    lastConnectErrorValue: 0,
-                    lastNetworkId: networkId,
-                    lastNetworkingStatus: NetworkCommissioning.NetworkCommissioningStatus.Success,
-                    networks: [{ networkId: networkId, connected: true }],
-                }
-            }
-        ).then((matterServer) => {
-            node.aggregator = new Endpoint(AggregatorEndpoint, { id: "aggregator" });
-            node.matterServer = matterServer;
-            node.matterServer.add(node.aggregator);
-            node.log("Bridge created");
-            node.serverReady = true;
-            
-            // Start server if no child nodes configured
-            if (node.users.length === 0) {
-                startServer();
-            }
-        }).catch((err) => {
-            node.error("Failed to create Matter server: " + err.message);
-        });
+        // ====================================================================
+        // EVENT HANDLERS
+        // ====================================================================
         
-        function startServer() {
-            if (node.serverReady && !node.matterServer.lifecycle.isOnline) {
-                node.log('Starting Matter server...');
-                node.matterServer.start().then(() => {
-                    node.log('Matter server started');
-                    
-                    // Update node status with QR code
-                    if (!node.matterServer.lifecycle.isCommissioned) {
-                        const pairingData = node.matterServer.state.commissioning.pairingCodes;
-                        node.status({
-                            fill: "blue",
-                            shape: "dot",
-                            text: `QR: ${pairingData.manualPairingCode}`
-                        });
-                        // Store QR data for display
-                        node.qrCode = pairingData.qrPairingCode;
-                        node.manualCode = pairingData.manualPairingCode;
-                    } else {
-                        node.status({
-                            fill: "green",
-                            shape: "dot",
-                            text: "commissioned"
-                        });
-                    }
-                    
-                    // Delay to ensure all device initialization errors are caught
-                    setTimeout(() => {
-                        node.registered.forEach(child => {
-                            if (!node.failedDevices.has(child.id) && !child.deviceInitFailed) {
-                                // Test if device is actually accessible before notifying
-                                try {
-                                    if (child.device && child.device.state) {
-                                        // Try to access the device to trigger any initialization errors
-                                        const test = Object.keys(child.device.state);
-                                        child.emit('serverReady');
-                                    } else {
-                                        child.error("Device not properly initialized");
-                                        child.status({fill:"red", shape:"ring", text:"init failed"});
-                                    }
-                                } catch (err) {
-                                    child.error(`Device validation check failed: ${err.message}`);
-                                    child.status({fill:"red", shape:"ring", text:"validation failed"});
-                                    node.failedDevices.add(child.id);
-                                }
-                            }
-                        });
-                    }, 3000);
-                }).catch((err) => {
-                    node.error('Failed to start server: ' + err.message);
-                });
-            } else if (node.serverReady && node.matterServer.lifecycle.isOnline) {
-                // Server already running, notify children
-                setTimeout(() => {
-                    node.registered.forEach(child => {
-                        if (!node.failedDevices.has(child.id) && !child.deviceInitFailed) {
-                            // Test if device is actually accessible before notifying
-                            try {
-                                if (child.device && child.device.state) {
-                                    // Try to access the device to trigger any initialization errors
-                                    const test = Object.keys(child.device.state);
-                                    child.emit('serverReady');
-                                } else {
-                                    child.error("Device not properly initialized");
-                                    child.status({fill:"red", shape:"ring", text:"init failed"});
-                                }
-                            } catch (err) {
-                                child.error(`Device validation check failed: ${err.message}`);
-                                child.status({fill:"red", shape:"ring", text:"validation failed"});
-                                node.failedDevices.add(child.id);
-                            }
-                        }
-                    });
-                }, 3000);
-            }
-        }
-        
-        // Function to register child devices
-        node.registerChild = function(child) {
-            node.log(`Registering device ${child.id}`);
-            
-            // Check if already registered
-            if (node.registered.find(c => c.id === child.id)) {
-                node.warn(`Device ${child.id} already registered, skipping`);
-                return;
-            }
-            
-            // Remove from pending users
-            const index = node.users.indexOf(child.id);
-            if (index > -1) {
-                node.users.splice(index, 1);
-            }
-            
-            node.registered.push(child);
-            
-            // Add device to aggregator
-            const deviceId = child.id.replace(/-/g, '');
-            if (node.aggregator && !node.aggregator.parts.has(deviceId)) {
-                try {
-                    node.aggregator.add(child.device);
-                    node.log(`Added device ${deviceId} to aggregator`);
-                    child.deviceAddedSuccessfully = true;
-                } catch (error) {
-                    node.error(`Failed to add device ${child.id}: ${error.message}`);
-                    child.error(`Device initialization failed: ${error.message}`);
-                    child.status({fill:"red", shape:"ring", text:"init failed"});
-                    child.deviceAddedSuccessfully = false;
-                }
-            }
-            
-            // Start server when all devices registered
-            if (node.users.length === 0) {
-                startServer();
-            }
-        };
-        
-        this.on('close', async function(removed, done) {
-            process.removeListener('unhandledRejection', unhandledRejectionHandler);
-            if (node.matterServer) {
-                node.log(removed ? "Bridge removed" : "Bridge restarted");
-                await node.matterServer.close();
-            }
-            done();
-        });
-        
-        // Remove disabled nodes from users list
+        // Handle flow start events
         RED.events.on("flows:started", function(flow) {
-            let disabledFlows = [];
+            const disabledFlows = [];
+            
             flow.config.flows.forEach(x => {
                 if (x.type === 'tab' && x.disabled) {
                     disabledFlows.push(x.id);
                 }
+                
                 if (x.d || disabledFlows.includes(x.z)) {
-                    let index = node.users.indexOf(x.id);
+                    const index = node.users.indexOf(x.id);
                     if (index > -1) {
                         node.log('Skipping disabled node: ' + x.id);
                         node.users.splice(index, 1);
@@ -315,167 +642,25 @@ module.exports = function(RED) {
                 }
             });
         });
+        
+        // ====================================================================
+        // CLEANUP
+        // ====================================================================
+        
+        this.on('close', async function(removed, done) {
+            node.errorHandler.cleanup();
+            
+            if (node.matterServer) {
+                node.log(removed ? "Bridge removed" : "Bridge restarted");
+                await node.matterServer.close();
+            }
+            
+            done();
+        });
     }
     
     RED.nodes.registerType("matter-dynamic-bridge", MatterDynamicBridge);
     
-    // Endpoint to get QR code for display in flow
-    RED.httpAdmin.get('/_matterbridge/qrcode/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
-        let targetNode = RED.nodes.getNode(req.params.id);
-        if (targetNode && targetNode.qrCode) {
-            try {
-                const qrSvg = await QRCode.toString(targetNode.qrCode, {
-                    type: 'svg',
-                    width: 200,
-                    margin: 1
-                });
-                res.json({
-                    qrCode: targetNode.qrCode,
-                    qrSvg: qrSvg,
-                    manualCode: targetNode.manualCode,
-                    commissioned: targetNode.matterServer?.lifecycle?.isCommissioned || false
-                });
-            } catch (err) {
-                res.json({
-                    qrCode: targetNode.qrCode,
-                    manualCode: targetNode.manualCode,
-                    commissioned: targetNode.matterServer?.lifecycle?.isCommissioned || false
-                });
-            }
-        } else if (targetNode && targetNode.matterServer) {
-            // Try to get from server state
-            if (!targetNode.matterServer.lifecycle.isCommissioned) {
-                const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                try {
-                    const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
-                        type: 'svg',
-                        width: 200,
-                        margin: 1
-                    });
-                    res.json({
-                        qrCode: pairingData.qrPairingCode,
-                        qrSvg: qrSvg,
-                        manualCode: pairingData.manualPairingCode,
-                        commissioned: false
-                    });
-                } catch (err) {
-                    res.json({
-                        qrCode: pairingData.qrPairingCode,
-                        manualCode: pairingData.manualPairingCode,
-                        commissioned: false
-                    });
-                }
-            } else {
-                res.json({
-                    commissioned: true
-                });
-            }
-        } else {
-            res.json({ error: "Bridge not ready" });
-        }
-    });
-    
-    // HTTP endpoints for commissioning
-    RED.httpAdmin.get('/_matterbridge/commissioning/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
-        let targetNode = RED.nodes.getNode(req.params.id);
-        if (targetNode && targetNode.matterServer) {
-            if (!targetNode.matterServer.lifecycle.isCommissioned) {
-                const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                
-                // Generate QR code SVG
-                try {
-                    const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
-                        type: 'svg',
-                        width: 200,
-                        margin: 1
-                    });
-                    
-                    res.json({
-                        state: 'ready',
-                        qrPairingCode: pairingData.qrPairingCode,
-                        qrSvg: qrSvg,
-                        manualPairingCode: pairingData.manualPairingCode
-                    });
-                } catch (err) {
-                    res.json({
-                        state: 'ready',
-                        qrPairingCode: pairingData.qrPairingCode,
-                        manualPairingCode: pairingData.manualPairingCode
-                    });
-                }
-            } else {
-                res.json({ state: 'commissioned' });
-            }
-        } else {
-            res.sendStatus(404);
-        }
-    });
-    
-    RED.httpAdmin.get('/_matterbridge/reopen/:id', RED.auth.needsPermission('admin.write'), async function(req, res) {
-        let targetNode = RED.nodes.getNode(req.params.id);
-        if (targetNode && targetNode.matterServer) {
-            try {
-                // Access the AdministratorCommissioning behavior
-                const endpoint = targetNode.matterServer;
-                const adminBehavior = endpoint.behaviors?.administratorCommissioning;
-                
-                if (adminBehavior && adminBehavior.openCommissioningWindow) {
-                    // Call openCommissioningWindow command
-                    await adminBehavior.openCommissioningWindow({
-                        commissioningTimeout: 900, // 15 minutes
-                        discriminator: targetNode.discriminator
-                    });
-                    
-                    const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                    res.json({
-                        state: 'ready',
-                        qrPairingCode: pairingData.qrPairingCode,
-                        manualPairingCode: pairingData.manualPairingCode
-                    });
-                } else {
-                    // Fallback: mark as uncommissioned to allow new pairing
-                    targetNode.matterServer.lifecycle.commissioned = false;
-                    const pairingData = targetNode.matterServer.state.commissioning.pairingCodes;
-                    
-                    try {
-                        const qrSvg = await QRCode.toString(pairingData.qrPairingCode, {
-                            type: 'svg',
-                            width: 200,
-                            margin: 1
-                        });
-                        res.json({
-                            state: 'ready',
-                            qrPairingCode: pairingData.qrPairingCode,
-                            qrSvg: qrSvg,
-                            manualPairingCode: pairingData.manualPairingCode
-                        });
-                    } catch (err) {
-                        res.json({
-                            state: 'ready',
-                            qrPairingCode: pairingData.qrPairingCode,
-                            manualPairingCode: pairingData.manualPairingCode
-                        });
-                    }
-                }
-            } catch (err) {
-                res.status(500).json({ error: err.message });
-            }
-        } else {
-            res.sendStatus(404);
-        }
-    });
-    
-    RED.httpAdmin.get('/_matterbridge/interfaces', RED.auth.needsPermission('admin.write'), function(req, res) {
-        let interfaces = os.networkInterfaces();
-        let output = [];
-        for (let iface in interfaces) {
-            for (let addr of interfaces[iface]) {
-                if (!addr.internal && addr.family === "IPv6") {
-                    output.push(iface);
-                    break;
-                }
-            }
-        }
-        res.json([...new Set(output)]);
-    });
+    // Setup HTTP API endpoints  
+    HttpApiHandler.setupEndpoints(RED);
 };
