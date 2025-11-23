@@ -63,6 +63,9 @@
     <div class="form-row">
         <label for="node-input-deviceConfig"><i class="fa fa-code"></i> Config</label>
         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-deviceConfig-editor"></div>
+        <div style="margin-top: 5px; color: #888; font-size: 11px;">
+            <i class="fa fa-info-circle"></i> Supports environment variables: <code>${ENV_VAR}</code> or <code>$ENV_VAR</code>
+        </div>
     </div>
 </script>
 
@@ -74,6 +77,14 @@
         <dt>deviceType <span class="property-type">string</span></dt>
         <dd>The Matter device type (e.g., "OnOffLightDevice", "ThermostatDevice")</dd>
     </dl>
+
+    <h3>Environment Variables</h3>
+    <p>The Config field supports environment variables using <code>${ENV_VAR}</code> or <code>$ENV_VAR</code> syntax.
+    This is useful when using the node inside subflows with subflow environment variables.</p>
+    <p><b>Example:</b></p>
+    <pre>{
+  "deviceType": "${DEVICE_TYPE}"
+}</pre>
 
     <h3>Inputs</h3>
     <p>The payload must match Matter.js cluster structure exactly:</p>

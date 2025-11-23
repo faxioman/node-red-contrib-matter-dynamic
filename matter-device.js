@@ -444,7 +444,8 @@ module.exports = function(RED) {
         
         // Basic configuration
         node.bridge = RED.nodes.getNode(config.bridge);
-        node.name = config.name;
+        // Support environment variables in name field
+        node.name = RED.util.evaluateNodeProperty(config.name, 'str', node) || config.name;
         node.type = 'matter-device';
         node.autoConfirm = /^true$/i.test(config.autoConfirm);
         node.deviceInitFailed = false;
@@ -462,12 +463,26 @@ module.exports = function(RED) {
             };
         });
         
-        // Parse device configuration
+        // Parse device configuration with environment variable support
         let deviceConfig;
         try {
-            deviceConfig = typeof config.deviceConfig === 'string'
-                ? JSON.parse(config.deviceConfig)
-                : config.deviceConfig;
+            let configString = typeof config.deviceConfig === 'string'
+                ? config.deviceConfig
+                : JSON.stringify(config.deviceConfig);
+
+            // Replace environment variables in the format ${ENV_VAR} or $ENV_VAR
+            configString = configString.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, p1, p2) => {
+                const envVar = p1 || p2;
+                const envValue = RED.util.evaluateNodeProperty(envVar, 'env', node);
+                if (envValue !== undefined) {
+                    // Escape quotes if the value will be inside a JSON string
+                    return String(envValue).replace(/"/g, '\\"');
+                }
+                node.warn(`Environment variable '${envVar}' not found, keeping original: ${match}`);
+                return match;
+            });
+
+            deviceConfig = JSON.parse(configString);
         } catch (e) {
             node.error("Invalid device configuration JSON: " + e.message);
             return;
