@@ -5,11 +5,18 @@ const matterBehaviors = require("@matter/main/behaviors");
 // BEHAVIOR PATCHING
 // ============================================================================
 
+// Track if behaviors have been patched to avoid duplicate patching
+let behaviorsPatched = false;
+
 /**
  * Patches all Matter behaviors to handle unimplemented commands gracefully.
  * This allows Node-RED to receive and process commands even if not implemented in Matter.js
  */
 function patchBehaviors() {
+    if (behaviorsPatched) {
+        return;
+    }
+    
     Object.values(matterBehaviors).forEach(BehaviorClass => {
         if (!BehaviorClass?.cluster?.commands || typeof BehaviorClass !== 'function') return;
         
@@ -18,30 +25,34 @@ function patchBehaviors() {
             
             BehaviorClass.prototype[cmd] = async function(request) {
                 // Send command to Node-RED second output
-                if (this.endpoint?.nodeRed) {
+                if (this.endpoint?.nodeRed && !this.endpoint.nodeRed._closed) {
                     const payload = {
                         command: cmd,
                         cluster: BehaviorClass.cluster.name,
                         data: request
                     };
                     
-                    this.endpoint.nodeRed.send([null, { payload }]);
-                    
-                    // Auto-confirm command if enabled
-                    if (this.endpoint.nodeRed.autoConfirm) {
-                        // Build confirmation state based on command
-                        const confirmState = this.endpoint.nodeRed.buildAutoConfirmState(cmd, BehaviorClass.cluster.name, request);
-                        if (confirmState) {
-                            // Schedule confirmation after a short delay to allow command to be processed
-                            setTimeout(() => {
-                                if (this.endpoint?.nodeRed) {
-                                    this.endpoint.nodeRed.log(`Auto-confirming command: ${cmd}`);
-                                    this.endpoint.set(confirmState).catch(err => {
-                                        this.endpoint.nodeRed.error(`Failed to auto-confirm: ${err.message}`);
-                                    });
-                                }
-                            }, 50);
+                    try {
+                        this.endpoint.nodeRed.send([null, { payload }]);
+                        
+                        // Auto-confirm command if enabled
+                        if (this.endpoint.nodeRed.autoConfirm) {
+                            // Build confirmation state based on command
+                            const confirmState = this.endpoint.nodeRed.buildAutoConfirmState(cmd, BehaviorClass.cluster.name, request);
+                            if (confirmState) {
+                                // Schedule confirmation after a short delay to allow command to be processed
+                                setTimeout(() => {
+                                    if (this.endpoint?.nodeRed && !this.endpoint.nodeRed._closed) {
+                                        this.endpoint.nodeRed.log(`Auto-confirming command: ${cmd}`);
+                                        this.endpoint.set(confirmState).catch(err => {
+                                            this.endpoint.nodeRed.error(`Failed to auto-confirm: ${err.message}`);
+                                        });
+                                    }
+                                }, 50);
+                            }
                         }
+                    } catch (err) {
+                        // Node may have been closed, ignore errors
                     }
                 }
                 
@@ -56,6 +67,8 @@ function patchBehaviors() {
             };
         });
     });
+    
+    behaviorsPatched = true;
 }
 
 // Apply patches before loading devices
@@ -519,7 +532,7 @@ module.exports = function(RED) {
             
             // Check device initialization after a delay
             setTimeout(async () => {
-                if (node.deviceInitFailed) return;
+                if (node.deviceInitFailed || node._closed) return;
                 
                 try {
                     if (!node.device?.state || !node.device?.events) {
@@ -533,14 +546,16 @@ module.exports = function(RED) {
                     eventManager.subscribe();
                     
                     // Set ready status if successful
-                    if (!node.deviceInitFailed) {
+                    if (!node.deviceInitFailed && !node._closed) {
                         node.status({fill:"green", shape:"dot", text:"ready"});
                         node.resolveInit();
                     }
                 } catch (err) {
-                    node.error(`Device not properly initialized: ${err.message}`);
-                    node.status({fill:"red", shape:"ring", text:"init failed"});
-                    node.deviceInitFailed = true;
+                    if (!node._closed) {
+                        node.error(`Device not properly initialized: ${err.message}`);
+                        node.status({fill:"red", shape:"ring", text:"init failed"});
+                        node.deviceInitFailed = true;
+                    }
                 }
             }, 2000);
         });
@@ -563,14 +578,23 @@ module.exports = function(RED) {
             const rtype = removed ? 'Device was removed/disabled' : 'Device was restarted';
             node.log(`Closing device: ${this.id}, ${rtype}`);
             
+            // Mark node as closed to prevent further operations
+            node._closed = true;
+            
             // Cleanup event subscriptions
             await eventManager.cleanup();
+            
+            // Clear nodeRed reference from endpoint to break circular references
+            if (node.device?.nodeRed) {
+                node.device.nodeRed = null;
+            }
             
             // Remove Node-RED Custom Events
             node.removeAllListeners('serverReady');
             node.removeAllListeners('deviceInitFailed');
+            node.removeAllListeners('input');
             
-            // Remove from bridge
+            // Remove from bridge registered list
             if (node.bridge?.registered) {
                 const index = node.bridge.registered.indexOf(node);
                 if (index > -1) {
@@ -578,10 +602,31 @@ module.exports = function(RED) {
                 }
             }
             
-            // Close device if removed
-            if (removed && node.device) {
-                await node.device.close();
+            // For partial deployments (not removed), remove device from aggregator
+            // This allows it to be re-added with fresh state on next deployment
+            if (!removed && node.device && node.bridge?.aggregator) {
+                const deviceId = node.id.replace(/-/g, '');
+                try {
+                    if (node.bridge.aggregator.parts.has(deviceId)) {
+                        await node.device.close();
+                        node.bridge.aggregator.parts.delete(deviceId);
+                        node.log(`Removed device from aggregator for redeployment`);
+                    }
+                } catch (err) {
+                    node.log(`Cleanup warning: ${err.message}`);
+                }
             }
+            
+            // Close device if completely removed
+            if (removed && node.device) {
+                try {
+                    await node.device.close();
+                } catch (err) {
+                    // Ignore close errors during removal
+                }
+            }
+            
+            node.device = null;
             
             done();
         });

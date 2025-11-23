@@ -124,7 +124,8 @@ class DeviceManager {
         }
         
         if (this.node.aggregator.parts.has(deviceId)) {
-            this.node.log(`Device ${deviceId} already in aggregator`);
+            this.node.warn(`Device ${deviceId} already in aggregator, skipping add`);
+            child.deviceAddedSuccessfully = true;
             return;
         }
         
