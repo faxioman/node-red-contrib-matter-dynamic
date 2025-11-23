@@ -378,6 +378,21 @@ class EventManager {
                 }
             }
             
+            // Handle auto-confirm for events
+            if (this.node.autoConfirm && !context?.offline) {
+                const confirmState = this.node.buildAutoConfirmStateForEvent(clusterName, attributeName, value);
+                if (confirmState) {
+                    // Schedule confirmation after a short delay
+                    setTimeout(() => {
+                        if (this.node.device && !this.node._closed) {
+                            this.node.device.set(confirmState).catch(err => {
+                                this.node.error(`Failed to auto-confirm event: ${err.message}`);
+                            });
+                        }
+                    }, 50);
+                }
+            }
+            
             // Send event to first output
             this.node.send([msg, null]);
         };
@@ -477,6 +492,20 @@ module.exports = function(RED) {
                 } else if (cmd === 'toggle' && node.device?.state?.onOff) {
                     state.onOff = { onOff: !node.device.state.onOff.onOff };
                 }
+            }
+            
+            return Object.keys(state).length > 0 ? state : null;
+        };
+        
+        // Build auto-confirm state based on event
+        node.buildAutoConfirmStateForEvent = function(clusterName, attributeName, value) {
+            const state = {};
+            
+            // Handle FanControl percentSetting events
+            if (clusterName === 'fanControl' && attributeName === 'percentSetting') {
+                state.fanControl = {
+                    percentCurrent: value  // Sync actual speed with target speed
+                };
             }
             
             return Object.keys(state).length > 0 ? state : null;

@@ -304,11 +304,18 @@ The device will emit events when these values change, allowing you to monitor ba
   "initialState": {
     "fanControl": {
       "fanModeSequence": 2,  // 0-5 based on supported modes
-      "percentCurrent": 0    // 0-100
+      "percentCurrent": 0,   // 0-100 (actual current speed)
+      "percentSetting": 0    // 0-100 (target speed)
     }
   }
 }
 ```
+
+**Note:** FanControl has two key attributes:
+- `percentSetting`: Target speed set by HomeKit/controller
+- `percentCurrent`: Actual current speed of the fan
+
+The system automatically syncs `percentCurrent` to match `percentSetting` when changed from HomeKit.
 
 ### Basic Video Player
 ```json
@@ -438,6 +445,13 @@ msg.payload = {
     currentLevel: 200
   }
 }
+
+// Thermostat temperature changed
+msg.payload = {
+  thermostat: {
+    occupiedHeatingSetpoint: 2100
+  }
+}
 ```
 
 **Output 2 - Commands** (from Matter controllers):
@@ -462,6 +476,22 @@ msg.payload = {
   cluster: "MediaPlayback"
 }
 ```
+
+### Command vs State Change Behavior
+
+**Some Matter devices may use attribute writes instead of commands:**
+
+In Matter, not all device operations use explicit commands. Some devices (like thermostats) primarily use direct attribute writes rather than commands.
+
+**When this happens:**
+- **Commands** (Output 2): Only appear for explicit device commands
+- **State Changes** (Output 1): Appear when controllers write directly to device attributes
+
+**Example - Thermostat:**
+- Setting temperature via HomeKit → Appears as state change in Output 1
+- Using `setpointRaiseLower` command → Appears as command in Output 2
+
+**This behavior varies by device type** and depends on how the Matter specification defines each device's interaction model. Always check both outputs to ensure you capture all device interactions.
 
 ## Complete Flow Example
 
@@ -567,10 +597,13 @@ msg.payload = {
 
 ## Auto-Confirm Feature
 
-The auto-confirm feature provides immediate state feedback when commands are received from Matter controllers (HomeKit, Alexa, etc.). This prevents the controller from reverting the device state due to timeout.
+The auto-confirm feature provides immediate state feedback when interactions are received from Matter controllers (HomeKit, Alexa, etc.). This prevents the controller from reverting the device state due to timeout.
 
-**Currently Supported:**
-- **OnOff cluster only** (`on`, `off`, `toggle` commands)
+**Currently supports both:**
+- **Commands**: Explicit device commands (e.g., `on`, `off`, `toggle`)
+- **Events**: Attribute writes that may require additional confirmation (e.g., fan speed synchronization)
+
+The feature automatically handles device-specific behaviors to ensure proper state synchronization with Matter controllers.
 
 ## Troubleshooting
 
@@ -598,6 +631,11 @@ Some devices have complex requirements:
 - **BasicVideoPlayerDevice**: Not supported by Alexa (Matter 1.4 device)
 
 When devices fail validation, check Node-RED logs for specific missing attributes.
+
+### Commands not appearing in Output 2
+Some devices (like thermostats) may not show commands in Output 2 when controlled from HomeKit/Alexa. This is expected behavior - these devices use direct attribute writes instead of commands.
+
+**Solution:** Monitor Output 1 for state changes, as this is where attribute modifications will appear.
 
 ### Common Payload Format Reference
 
