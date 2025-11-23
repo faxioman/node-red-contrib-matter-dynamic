@@ -76,26 +76,7 @@
         "y": 180,
         "wires": [
             [
-                "b03d3b62b8763ec2"
-            ]
-        ]
-    },
-    {
-        "id": "b03d3b62b8763ec2",
-        "type": "matter-device",
-        "z": "matter-test-flow",
-        "name": "Thermostat with battery",
-        "bridge": "d83255fdf62c8c61",
-        "autoConfirm": true,
-        "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"additionalBehaviors\": [\n    \"PowerSourceServer\"\n  ],\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ],\n    \"PowerSource\": [\n      \"Battery\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"controlSequenceOfOperation\": 4,\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"occupiedHeatingSetpoint\": 2000,\n      \"occupiedCoolingSetpoint\": 2600\n    },\n    \"powerSource\": {\n      \"status\": 1,\n      \"order\": 1,\n      \"description\": \"Battery\",\n      \"batChargeLevel\": 0,\n      \"batPercentRemaining\": 200,\n      \"batReplacementNeeded\": false,\n      \"batReplaceability\": 1\n    }\n  }\n}",
-        "x": 490,
-        "y": 180,
-        "wires": [
-            [
-                "c20591babe754864"
-            ],
-            [
-                "31dc12ee897b667f"
+                "322e4c02fceb9a99"
             ]
         ]
     },
@@ -187,6 +168,25 @@
         "deviceConfig": "{\n  \"deviceType\": \"OnOffPlugInUnitDevice\"\n}",
         "x": 530,
         "y": 420,
+        "wires": [
+            [
+                "c20591babe754864"
+            ],
+            [
+                "31dc12ee897b667f"
+            ]
+        ]
+    },
+    {
+        "id": "322e4c02fceb9a99",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "Thermostat with battery",
+        "bridge": "d83255fdf62c8c61",
+        "autoConfirm": true,
+        "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"additionalBehaviors\": [\n    \"PowerSourceServer\",\n    \"FanControlServer\",\n    \"RelativeHumidityMeasurementServer\"\n  ],\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ],\n    \"PowerSource\": [\n      \"Battery\",\n      \"Replaceable\"\n    ],\n    \"FanControl\": [\n      \"MultiSpeed\"\n    ],\n    \"RelativeHumidityMeasurement\": [\n      \"Percentage\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"controlSequenceOfOperation\": 4,\n      \"minHeatSetpointLimit\": 1600,\n      \"maxHeatSetpointLimit\": 3200,\n      \"minCoolSetpointLimit\": 1600,\n      \"maxCoolSetpointLimit\": 3200,\n      \"occupiedHeatingSetpoint\": 2100,\n      \"occupiedCoolingSetpoint\": 2200,\n      \"absMinHeatSetpointLimit\": 1600,\n      \"absMaxHeatSetpointLimit\": 3200,\n      \"absMinCoolSetpointLimit\": 1600,\n      \"absMaxCoolSetpointLimit\": 3200\n    },\n    \"powerSource\": {\n      \"status\": 1,\n      \"order\": 1,\n      \"description\": \"Battery\",\n      \"batChargeLevel\": 0,\n      \"batPercentRemaining\": 200,\n      \"batReplacementNeeded\": false,\n      \"batReplaceability\": 1,\n      \"batReplacementDescription\": \"CR2032\",\n      \"batQuantity\": 1\n    },\n    \"fanControl\": {\n      \"fanModeSequence\": 5,\n      \"percentCurrent\": 0,\n      \"percentSetting\": 0,\n      \"speedMax\": 100,\n      \"speedCurrent\": 0\n    },\n    \"relativeHumidityMeasurement\": {\n      \"measuredValue\": 5000,\n      \"minMeasuredValue\": 0,\n      \"maxMeasuredValue\": 10000\n    }\n  }\n}",
+        "x": 490,
+        "y": 180,
         "wires": [
             [
                 "c20591babe754864"

@@ -1,5 +1,6 @@
 const { Endpoint } = require("@matter/main");
 const matterBehaviors = require("@matter/main/behaviors");
+const { getMatterDeviceId, getMatterUniqueId } = require("./utils");
 
 // ============================================================================
 // BEHAVIOR PATCHING
@@ -231,14 +232,15 @@ class DeviceFactory {
      * Creates Matter endpoint with configuration
      */
     static createEndpoint(node, DeviceClass, behaviors, deviceConfig) {
+        const deviceId = getMatterDeviceId(node.id);
         const endpointConfig = {
-            id: node.id.replace(/-/g, ''),
+            id: deviceId,
             bridgedDeviceBasicInformation: {
                 nodeLabel: node.name,
                 productName: node.name,
                 productLabel: node.name,
-                serialNumber: node.id.replace(/-/g, ''),
-                uniqueId: node.id.replace(/-/g, '').split("").reverse().join(""),
+                serialNumber: deviceId,
+                uniqueId: getMatterUniqueId(node.id),
                 reachable: true,
             }
         };
@@ -602,21 +604,6 @@ module.exports = function(RED) {
                 }
             }
             
-            // For partial deployments (not removed), remove device from aggregator
-            // This allows it to be re-added with fresh state on next deployment
-            if (!removed && node.device && node.bridge?.aggregator) {
-                const deviceId = node.id.replace(/-/g, '');
-                try {
-                    if (node.bridge.aggregator.parts.has(deviceId)) {
-                        await node.device.close();
-                        node.bridge.aggregator.parts.delete(deviceId);
-                        node.log(`Removed device from aggregator for redeployment`);
-                    }
-                } catch (err) {
-                    node.log(`Cleanup warning: ${err.message}`);
-                }
-            }
-            
             // Close device if completely removed
             if (removed && node.device) {
                 try {
@@ -646,7 +633,16 @@ module.exports = function(RED) {
                 setTimeout(waitForBridge, 100, node);
             } else {
                 try {
-                    node.device = DeviceFactory.createDevice(node, deviceConfig);
+                    // Check if device already exists in aggregator before creating new one
+                    const deviceId = getMatterDeviceId(node.id);
+                    const existingDevice = node.bridge.aggregator?.parts.get(deviceId);
+                    
+                    if (existingDevice) {
+                        existingDevice.nodeRed = node;
+                        node.device = existingDevice;
+                    } else {
+                        node.device = DeviceFactory.createDevice(node, deviceConfig);
+                    }
                     
                     if (typeof node.bridge.registerChild === 'function') {
                         node.bridge.registerChild(node);

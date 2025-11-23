@@ -5,6 +5,7 @@ const { NetworkCommissioning } = require("@matter/main/clusters");
 const { NetworkCommissioningServer } = require("@matter/main/behaviors");
 const os = require('os');
 const QRCode = require('qrcode');
+const { getMatterDeviceId, getMatterUniqueId } = require("./utils");
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -116,15 +117,20 @@ class DeviceManager {
      * Add device to Matter aggregator
      */
     addToAggregator(child) {
-        const deviceId = child.id.replace(/-/g, '');
+        const deviceId = getMatterDeviceId(child.id);
         
         if (!this.node.aggregator) {
             this.node.error("Aggregator not ready");
             return;
         }
         
-        if (this.node.aggregator.parts.has(deviceId)) {
-            this.node.warn(`Device ${deviceId} already in aggregator, skipping add`);
+        const existingDevice = this.node.aggregator.parts.get(deviceId);
+        if (existingDevice) {
+            // Update node reference on existing device
+            if (existingDevice.nodeRed !== child) {
+                existingDevice.nodeRed = child;
+                child.device = existingDevice;
+            }
             child.deviceAddedSuccessfully = true;
             return;
         }
@@ -245,6 +251,7 @@ class ServerManager {
     createServerConfig() {
         const config = this.node.bridgeConfig;
         const networkId = new Uint8Array(32);
+        const deviceId = getMatterDeviceId(this.node.id);
         
         return {
             id: this.node.id,
@@ -266,8 +273,8 @@ class ServerManager {
                 productName: config.productName,
                 productLabel: config.name,
                 productId: config.productId,
-                serialNumber: this.node.id.replace(/-/g, ''),
-                uniqueId: this.node.id.replace(/-/g, '').split("").reverse().join(""),
+                serialNumber: deviceId,
+                uniqueId: getMatterUniqueId(this.node.id),
                 hardwareVersion: 1,
                 softwareVersion: 1
             },
@@ -378,8 +385,8 @@ class ErrorHandler {
      * Handle a failed device initialization
      */
     handleFailedDevice(failedDeviceId, errorStr) {
-        const failedChild = this.node.deviceManager.registered.find(child => 
-            child.id.replace(/-/g, '') === failedDeviceId
+        const failedChild = this.node.deviceManager.registered.find(child =>
+            getMatterDeviceId(child.id) === failedDeviceId
         );
         
         if (!failedChild) return;
