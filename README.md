@@ -21,6 +21,7 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 - Compatible with Apple HomeKit, Google Home, Amazon Alexa (via Matter)
 - Support for all Matter.js device types
 - Composite devices support (e.g., thermostat with battery)
+- Auto-confirm commands for immediate state feedback (OnOff cluster only)
 
 ## Quick Start
 
@@ -212,7 +213,7 @@ Add extra functionality to any device using additional behaviors/clusters.
   "additionalBehaviors": ["PowerSourceServer"],
   "initialState": {
     "occupancySensing": {
-      "occupancy": { occupied: false }
+      "occupancy": { "occupied": false }
     },
     "powerSource": {
       "status": 1,
@@ -563,6 +564,13 @@ msg.payload = {
 - `CastingVideoPlayerDevice` - Casting device
 - `VideoRemoteControlDevice` - Remote control
 - `SpeakerDevice` - Speaker control
+
+## Auto-Confirm Feature
+
+The auto-confirm feature provides immediate state feedback when commands are received from Matter controllers (HomeKit, Alexa, etc.). This prevents the controller from reverting the device state due to timeout.
+
+**Currently Supported:**
+- **OnOff cluster only** (`on`, `off`, `toggle` commands)
 
 ## Troubleshooting
 

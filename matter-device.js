@@ -464,67 +464,6 @@ module.exports = function(RED) {
                 }
             }
             
-            // Handle LevelControl commands
-            if (clusterName === 'LevelControl' && request) {
-                if ((cmd === 'moveToLevel' || cmd === 'moveToLevelWithOnOff') && request.level !== undefined) {
-                    state.levelControl = { currentLevel: request.level };
-                    if (cmd === 'moveToLevelWithOnOff') {
-                        state.onOff = { onOff: request.level > 0 };
-                    }
-                }
-            }
-            
-            // Handle ColorControl commands
-            if (clusterName === 'ColorControl' && request) {
-                if (cmd === 'moveToColorTemperature' && request.colorTemperatureMireds !== undefined) {
-                    state.colorControl = {
-                        colorTemperatureMireds: request.colorTemperatureMireds,
-                        colorMode: 2 // ColorTemperatureMireds mode
-                    };
-                } else if (cmd === 'moveToHueAndSaturation' && request.hue !== undefined && request.saturation !== undefined) {
-                    state.colorControl = {
-                        currentHue: request.hue,
-                        currentSaturation: request.saturation,
-                        colorMode: 0 // CurrentHueAndCurrentSaturation mode
-                    };
-                }
-            }
-            
-            // Handle WindowCovering commands
-            if (clusterName === 'WindowCovering') {
-                if (cmd === 'upOrOpen') {
-                    state.windowCovering = {
-                        currentPositionLiftPercent100ths: 0,
-                        targetPositionLiftPercent100ths: 0
-                    };
-                } else if (cmd === 'downOrClose') {
-                    state.windowCovering = {
-                        currentPositionLiftPercent100ths: 10000,
-                        targetPositionLiftPercent100ths: 10000
-                    };
-                } else if (cmd === 'stopMotion' && node.device?.state?.windowCovering) {
-                    const currentPos = node.device.state.windowCovering.currentPositionLiftPercent100ths || 0;
-                    state.windowCovering = {
-                        currentPositionLiftPercent100ths: currentPos,
-                        targetPositionLiftPercent100ths: currentPos
-                    };
-                } else if (cmd === 'goToLiftPercentage' && request.liftPercent100thsValue !== undefined) {
-                    state.windowCovering = {
-                        currentPositionLiftPercent100ths: request.liftPercent100thsValue,
-                        targetPositionLiftPercent100ths: request.liftPercent100thsValue
-                    };
-                }
-            }
-            
-            // Handle DoorLock commands
-            if (clusterName === 'DoorLock') {
-                if (cmd === 'lockDoor') {
-                    state.doorLock = { lockState: 1 }; // Locked
-                } else if (cmd === 'unlockDoor') {
-                    state.doorLock = { lockState: 2 }; // Unlocked
-                }
-            }
-            
             return Object.keys(state).length > 0 ? state : null;
         };
         

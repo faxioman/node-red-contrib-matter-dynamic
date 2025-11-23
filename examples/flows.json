@@ -5,7 +5,7 @@
         "label": "Matter Dynamic Test"
     },
     {
-        "id": "a6d6c6598a6ef9cc",
+        "id": "d83255fdf62c8c61",
         "type": "matter-dynamic-bridge",
         "name": "Matter Bridge",
         "vendorId": "65521",
@@ -22,7 +22,7 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "light",
-        "bridge": "a6d6c6598a6ef9cc",
+        "bridge": "d83255fdf62c8c61",
         "autoConfirm": true,
         "deviceConfig": "{\n  \"deviceType\": \"OnOffLightDevice\"\n}",
         "x": 550,
@@ -41,7 +41,7 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "Switch",
-        "bridge": "a6d6c6598a6ef9cc",
+        "bridge": "d83255fdf62c8c61",
         "autoConfirm": false,
         "deviceConfig": "{\n  \"deviceType\": \"GenericSwitchDevice\",\n  \"initialState\": {\n    \"switch\": {\n      \"numberOfPositions\": 2,\n      \"currentPosition\": 0\n    }\n  }\n}",
         "x": 550,
@@ -85,7 +85,7 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "Thermostat with battery",
-        "bridge": "a6d6c6598a6ef9cc",
+        "bridge": "d83255fdf62c8c61",
         "autoConfirm": true,
         "deviceConfig": "{\n  \"deviceType\": \"ThermostatDevice\",\n  \"additionalBehaviors\": [\n    \"PowerSourceServer\"\n  ],\n  \"behaviorFeatures\": {\n    \"Thermostat\": [\n      \"Heating\",\n      \"Cooling\"\n    ],\n    \"PowerSource\": [\n      \"Battery\"\n    ]\n  },\n  \"initialState\": {\n    \"thermostat\": {\n      \"controlSequenceOfOperation\": 4,\n      \"localTemperature\": 2000,\n      \"systemMode\": 4,\n      \"occupiedHeatingSetpoint\": 2000,\n      \"occupiedCoolingSetpoint\": 2600\n    },\n    \"powerSource\": {\n      \"status\": 1,\n      \"order\": 1,\n      \"description\": \"Battery\",\n      \"batChargeLevel\": 0,\n      \"batPercentRemaining\": 200,\n      \"batReplacementNeeded\": false,\n      \"batReplaceability\": 1\n    }\n  }\n}",
         "x": 490,
@@ -163,11 +163,30 @@
         "type": "matter-device",
         "z": "matter-test-flow",
         "name": "Temperature",
-        "bridge": "a6d6c6598a6ef9cc",
+        "bridge": "d83255fdf62c8c61",
         "autoConfirm": false,
         "deviceConfig": "{\n  \"deviceType\": \"TemperatureSensorDevice\"\n}",
         "x": 530,
         "y": 300,
+        "wires": [
+            [
+                "c20591babe754864"
+            ],
+            [
+                "31dc12ee897b667f"
+            ]
+        ]
+    },
+    {
+        "id": "3c1ec895ad39b191",
+        "type": "matter-device",
+        "z": "matter-test-flow",
+        "name": "on/off switch",
+        "bridge": "d83255fdf62c8c61",
+        "autoConfirm": true,
+        "deviceConfig": "{\n  \"deviceType\": \"OnOffPlugInUnitDevice\"\n}",
+        "x": 530,
+        "y": 420,
         "wires": [
             [
                 "c20591babe754864"
