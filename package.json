@@ -1,6 +1,6 @@
 {
   "name": "@faxioman/node-red-contrib-matter-dynamic",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Dynamic Matter device nodes for Node-RED",
   "main": "matter-device.js",
   "scripts": {
