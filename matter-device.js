@@ -125,59 +125,12 @@ class DeviceFactory {
      * Creates a Matter device based on JSON configuration
      */
     static createDevice(node, deviceConfig) {
-        // Handle composite devices (array of device types)
-        if (Array.isArray(deviceConfig.deviceType)) {
-            return this.createEnhancedDevice(node, deviceConfig);
-        }
-        
-        // Standard single device type
-        return this.createStandardDevice(node, deviceConfig);
-    }
-    
-    /**
-     * Creates a standard Matter device with optional additional behaviors
-     */
-    static createStandardDevice(node, deviceConfig) {
         const DeviceClass = matterDevices[deviceConfig.deviceType];
         if (!DeviceClass) {
             throw new Error(`Device type '${deviceConfig.deviceType}' not found`);
         }
 
         // Collect mandatory behaviors from device requirements
-        const behaviors = this.getMandatoryBehaviors(DeviceClass, deviceConfig.behaviorFeatures);
-        
-        // Add base behaviors
-        behaviors.push(BridgedDeviceBasicInformationServer, DynamicIdentifyServer);
-        
-        // Add additional behaviors if specified
-        if (deviceConfig.additionalBehaviors) {
-            const additionalBehaviors = this.createBehaviorsWithFeatures(
-                deviceConfig.additionalBehaviors,
-                deviceConfig.behaviorFeatures
-            );
-            behaviors.push(...additionalBehaviors);
-        }
-        
-        // Create and return endpoint
-        return this.createEndpoint(node, DeviceClass, behaviors, deviceConfig);
-    }
-    
-    /**
-     * Creates an enhanced device with additional behaviors (e.g., thermostat with battery)
-     */
-    static createEnhancedDevice(node, deviceConfig) {
-        // Matter endpoints can only have ONE primary device type
-        if (!Array.isArray(deviceConfig.deviceType) || deviceConfig.deviceType.length === 0) {
-            throw new Error("deviceType must be an array with at least one device type");
-        }
-        
-        const primaryDeviceTypeName = deviceConfig.deviceType[0];
-        const DeviceClass = matterDevices[primaryDeviceTypeName];
-        if (!DeviceClass) {
-            throw new Error(`Device type '${primaryDeviceTypeName}' not found`);
-        }
-        
-        // Collect mandatory behaviors from primary device
         const behaviors = this.getMandatoryBehaviors(DeviceClass, deviceConfig.behaviorFeatures);
         
         // Add base behaviors

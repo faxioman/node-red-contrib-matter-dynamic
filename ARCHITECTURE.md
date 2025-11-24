@@ -227,32 +227,36 @@ Example messages:
   - Video Players (Matter 1.4) - Not recognized by HomeKit/Tuya yet
   - Advanced features may require specific controller support
 
-## Composite Devices Architecture
+## Enhanced Devices Architecture
 
 ### Overview
-The system supports creating composite devices by combining multiple device types on a single endpoint, following the approach proven in matterbridge-zigbee2mqtt.
+The system supports creating enhanced devices by adding additional behaviors/clusters to a primary device type using the `additionalBehaviors` configuration.
 
-### Composite Device Implementation
-Combines multiple device types on a single endpoint using an array:
+### Enhanced Device Implementation
+Adds extra functionality to a primary device type:
 ```javascript
 {
-  "deviceType": ["ThermostatDevice", "PowerSourceDevice"]
+  "deviceType": "ThermostatDevice",
+  "additionalBehaviors": ["PowerSourceServer", "RelativeHumidityMeasurementServer"]
 }
 ```
 
 ### How It Works
-1. **Device Type Collection**: All specified device types are collected
-2. **Behavior Aggregation**: All required behaviors from all device types are merged
-3. **Duplicate Removal**: Duplicate behaviors are automatically filtered out
-4. **Single Endpoint**: Everything runs on a single BridgedNodeEndpoint
+1. **Primary Device Type**: The main device type (e.g., ThermostatDevice)
+2. **Additional Behaviors**: Extra clusters added to the same endpoint
+3. **Behavior Aggregation**: All behaviors are merged into a single endpoint
+4. **Single Endpoint**: Everything runs on one BridgedNodeEndpoint
 
-### Example: Thermostat with Battery
+### Example: Thermostat with Battery and Humidity
 ```javascript
 // Configuration
 {
-  "deviceType": ["ThermostatDevice", "PowerSourceDevice"],
+  "deviceType": "ThermostatDevice",
+  "additionalBehaviors": ["PowerSourceServer", "RelativeHumidityMeasurementServer"],
   "behaviorFeatures": {
-    "Thermostat": ["Heating", "Cooling"]
+    "Thermostat": ["Heating", "Cooling"],
+    "PowerSource": ["Battery", "Replaceable"],
+    "RelativeHumidityMeasurement": ["Percentage"]
   },
   "initialState": {
     "thermostat": {
@@ -263,13 +267,17 @@ Combines multiple device types on a single endpoint using an array:
     "powerSource": {
       "batPercentRemaining": 100,
       "batChargeLevel": 1
+    },
+    "relativeHumidityMeasurement": {
+      "measuredValue": 5000
     }
   }
 }
 
 // Results in single endpoint with:
 // - ThermostatServer (with Heating/Cooling features)
-// - PowerSourceServer
+// - PowerSourceServer (with Battery features)
+// - RelativeHumidityMeasurementServer
 // - BridgedDeviceBasicInformationServer
 // - IdentifyServer
 ```
@@ -278,7 +286,7 @@ Combines multiple device types on a single endpoint using an array:
 - **Simple**: One endpoint manages all functionality
 - **Compatible**: Works with all Matter controllers
 - **Efficient**: No complex child endpoint management
-- **Proven**: Same approach as matterbridge-zigbee2mqtt
+- **Flexible**: Add only the behaviors you need
 
 ### Event Handling
 All events come from the same endpoint:
@@ -288,6 +296,9 @@ All events come from the same endpoint:
 
 // Battery event
 { payload: { powerSource: { batPercentRemaining: 90 } } }
+
+// Humidity event
+{ payload: { relativeHumidityMeasurement: { measuredValue: 6000 } } }
 ```
 
 ## Next Steps
