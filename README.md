@@ -25,25 +25,21 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 
 ## Quick Start
 
-### 1. Setup Matter Bridge
+### 1. Add Your First Matter Device
 
-1. Drag a **Matter Dynamic Bridge** node from the palette
-2. Double-click to configure:
-   - **Name**: Give your bridge a name
-   - **Port**: Default 5540 (change if needed)
-   - **Network Interface**: Select your network interface or leave default
-3. Deploy the flow
-4. Open the bridge node to see the QR code for pairing
-
-### 2. Add Dynamic Devices
-
-1. Drag a **Matter Device** node
-2. Configure:
+1. Add a **Matter Device** node and configure:
    - **Name**: Device name
-   - **Bridge**: Select your bridge
+   - **Bridge**: Create a new bridge from the device configuration
    - **Config**: JSON configuration (see examples below)
-3. Connect input/output nodes as needed
-4. Deploy
+2. Configure the bridge with name, port (default 5540), and network interface
+3. Deploy the flow
+4. Open the bridge node to get the QR code for pairing
+
+### 2. Add More Devices
+
+1. Add additional **Matter Device** nodes
+2. Select your existing bridge and configure with JSON
+3. Deploy and connect as needed
 
 ### 3. Pair with HomeKit/Google/Alexa
 
@@ -53,10 +49,74 @@ npm install @faxioman/node-red-contrib-matter-dynamic
 
 ## Configuration Examples
 
-### Simple Light
+> **Note:** All examples below are real configurations tested and confirmed working with actual Matter devices.
+> **Contributions welcome:** If you have tested other device configurations that work well, please consider contributing them to improve this documentation.
+> **Compatibility:** Virtually all Matter devices specified in the [Matter.js library](https://github.com/matter-js/matter.js) are supported.
+
+### Simple On/Off Light
 ```json
 {
   "deviceType": "OnOffLightDevice"
+}
+```
+
+### Color Temperature Light (Dimmable)
+```json
+{
+  "deviceType": "ColorTemperatureLightDevice",
+  "initialState": {
+    "colorControl": {
+      "colorMode": 2,
+      "ColorTemperatureMireds": 454,
+      "coupleColorTempToLevelMinMireds": 250,
+      "startUpColorTemperatureMireds": 454,
+      "colorTempPhysicalMinMireds": 250,
+      "colorTempPhysicalMaxMireds": 454
+    },
+    "levelControl": {
+      "currentLevel": 254
+    }
+  }
+}
+```
+
+### Extended Color Light (RGB)
+```json
+{
+  "deviceType": "ExtendedColorLightDevice",
+  "behaviorFeatures": {
+    "ColorControl": [
+      "HueSaturation"
+    ]
+  },
+  "initialState": {
+    "colorControl": {
+      "colorMode": 0,
+      "colorCapabilities": 1,
+      "numberOfPrimaries": 0
+    }
+  }
+}
+```
+
+### Smart Plug / On/Off Switch
+```json
+{
+  "deviceType": "OnOffPlugInUnitDevice"
+}
+```
+
+### Temperature Sensor
+```json
+{
+  "deviceType": "TemperatureSensorDevice"
+}
+```
+
+### Humidity Sensor
+```json
+{
+  "deviceType": "HumiditySensorDevice"
 }
 ```
 
@@ -92,74 +152,123 @@ You can add extra behaviors (clusters) to any device type. This is useful for ad
 - `PowerSourceServer` - Battery/power status
 - `ElectricalEnergyMeasurementServer` - Energy monitoring
 - `BooleanStateServer` - Binary state indication
+- `FanControlServer` - Fan control
+- `RelativeHumidityMeasurementServer` - Humidity measurement
 
-### Dimmable Light
-```json
-{
-  "deviceType": "DimmableLightDevice"
-}
-```
-
-### Color Temperature Light
-```json
-{
-  "deviceType": "ColorTemperatureLightDevice"
-}
-```
-
-### Temperature Sensor
-```json
-{
-  "deviceType": "TemperatureSensorDevice"
-}
-```
-
-### Generic Switch (Multi-button)
-```json
-{
-  "deviceType": "GenericSwitchDevice",
-  "initialState": {
-    "switch": {
-      "numberOfPositions": 2,     // Number of buttons (2 = on/off)
-      "currentPosition": 0,       // Initial position (0-based)
-      "multiPressMax": 2         // Max consecutive presses
-    }
-  }
-}
-```
-
-For a 3-button switch:
-```json
-{
-  "deviceType": "GenericSwitchDevice",
-  "initialState": {
-    "switch": {
-      "numberOfPositions": 3,
-      "currentPosition": 0
-    }
-  }
-}
-```
-
-### Thermostat
-Thermostats require features to be specified:
+### Thermostat (Heating + Cooling + Fan + Humidity + Battery)
 ```json
 {
   "deviceType": "ThermostatDevice",
+  "additionalBehaviors": [
+    "PowerSourceServer",
+    "FanControlServer",
+    "RelativeHumidityMeasurementServer"
+  ],
   "behaviorFeatures": {
-    "Thermostat": ["Heating", "Cooling"]  // Specify features needed
+    "Thermostat": [
+      "Heating",
+      "Cooling"
+    ],
+    "PowerSource": [
+      "Battery",
+      "Replaceable"
+    ],
+    "FanControl": [
+      "MultiSpeed"
+    ],
+    "RelativeHumidityMeasurement": [
+      "Percentage"
+    ]
   },
   "initialState": {
     "thermostat": {
       "localTemperature": 2000,
       "systemMode": 4,
-      "controlSequenceOfOperation": 4,  // 2=HeatingOnly, 4=CoolingAndHeating
-      "minHeatSetpointLimit": 500,
-      "maxHeatSetpointLimit": 3500,
-      "minCoolSetpointLimit": 0,
-      "maxCoolSetpointLimit": 2100,
-      "occupiedHeatingSetpoint": 2000,
-      "occupiedCoolingSetpoint": 2600
+      "controlSequenceOfOperation": 4,
+      "minHeatSetpointLimit": 1600,
+      "maxHeatSetpointLimit": 3200,
+      "minCoolSetpointLimit": 1600,
+      "maxCoolSetpointLimit": 3200,
+      "occupiedHeatingSetpoint": 2100,
+      "occupiedCoolingSetpoint": 2200,
+      "absMinHeatSetpointLimit": 1600,
+      "absMaxHeatSetpointLimit": 3200,
+      "absMinCoolSetpointLimit": 1600,
+      "absMaxCoolSetpointLimit": 3200
+    },
+    "powerSource": {
+      "status": 1,
+      "order": 1,
+      "description": "Battery",
+      "batChargeLevel": 0,
+      "batPercentRemaining": 200,
+      "batReplacementNeeded": false,
+      "batReplaceability": 1,
+      "batReplacementDescription": "CR2032",
+      "batQuantity": 1
+    },
+    "fanControl": {
+      "fanModeSequence": 5,
+      "percentCurrent": 0,
+      "percentSetting": 0,
+      "speedMax": 100,
+      "speedCurrent": 0
+    },
+    "relativeHumidityMeasurement": {
+      "measuredValue": 5000,
+      "minMeasuredValue": 0,
+      "maxMeasuredValue": 10000
+    }
+  }
+}
+```
+
+### Thermostat (Heating Only + Humidity + Battery)
+```json
+{
+  "deviceType": "ThermostatDevice",
+  "additionalBehaviors": [
+    "PowerSourceServer",
+    "RelativeHumidityMeasurementServer"
+  ],
+  "behaviorFeatures": {
+    "Thermostat": [
+      "Heating"
+    ],
+    "PowerSource": [
+      "Battery",
+      "Replaceable"
+    ],
+    "RelativeHumidityMeasurement": [
+      "Percentage"
+    ]
+  },
+  "initialState": {
+    "thermostat": {
+      "localTemperature": 2000,
+      "systemMode": 4,
+      "controlSequenceOfOperation": 2,
+      "minHeatSetpointLimit": 1600,
+      "maxHeatSetpointLimit": 3200,
+      "occupiedHeatingSetpoint": 2100,
+      "absMinHeatSetpointLimit": 1600,
+      "absMaxHeatSetpointLimit": 3200
+    },
+    "powerSource": {
+      "status": 1,
+      "order": 1,
+      "description": "Battery",
+      "batChargeLevel": 0,
+      "batPercentRemaining": 200,
+      "batReplacementNeeded": false,
+      "batReplaceability": 1,
+      "batReplacementDescription": "CR2032",
+      "batQuantity": 1
+    },
+    "relativeHumidityMeasurement": {
+      "measuredValue": 5000,
+      "minMeasuredValue": 0,
+      "maxMeasuredValue": 10000
     }
   }
 }
@@ -296,85 +405,6 @@ You can also update device state and battery together:
 ```
 
 The device will emit events when these values change, allowing you to monitor battery status in real-time.
-
-### Fan Device
-```json
-{
-  "deviceType": "FanDevice",
-  "initialState": {
-    "fanControl": {
-      "fanModeSequence": 2,  // 0-5 based on supported modes
-      "percentCurrent": 0,   // 0-100 (actual current speed)
-      "percentSetting": 0    // 0-100 (target speed)
-    }
-  }
-}
-```
-
-**Note:** FanControl has two key attributes:
-- `percentSetting`: Target speed set by HomeKit/controller
-- `percentCurrent`: Actual current speed of the fan
-
-The system automatically syncs `percentCurrent` to match `percentSetting` when changed from HomeKit.
-
-### Basic Video Player
-```json
-{
-  "deviceType": "BasicVideoPlayerDevice",
-  "initialState": {
-    "mediaPlayback": {
-      "currentState": 0  // 0=Playing, 1=Paused, 2=NotPlaying, 3=Buffering
-    }
-  }
-}
-```
-
-### Casting Video Player
-```json
-{
-  "deviceType": "CastingVideoPlayerDevice",
-  "initialState": {
-    "mediaPlayback": {
-      "currentState": 0  // 0=Playing, 1=Paused, 2=NotPlaying, 3=Buffering
-    },
-    "contentLauncher": {
-      "supportedStreamingProtocols": 0,  // Bitmask of supported protocols
-      "acceptHeader": []  // Array of accepted content types
-    }
-  }
-}
-```
-
-### Video Player Command Messages
-
-Video players emit command messages when controlled via Matter:
-
-**Media Playback Commands**
-```javascript
-// Received when play is pressed
-msg.payload = {
-  command: "play",
-  cluster: "mediaPlayback"
-}
-
-// Other commands: pause, stop, next, previous, startOver
-// Commands with data: skipForward, skipBackward, seek, rewind, fastForward
-msg.payload = {
-  command: "skipForward",
-  cluster: "mediaPlayback",
-  data: { deltaPositionMilliseconds: 30000 }
-}
-```
-
-**Keypad Input Commands**
-```javascript
-// Received when a key is pressed
-msg.payload = {
-  command: "sendKey",
-  cluster: "keypadInput",
-  data: { keyCode: 0 }  // 0=Select, 1=Up, 2=Down, etc.
-}
-```
 
 ## Input/Output Format
 
