@@ -463,25 +463,36 @@ module.exports = function(RED) {
             };
         });
         
-        // Parse device configuration with environment variable support
+        // Parse device configuration with Mustache template support
         let deviceConfig;
+        let configString;
         try {
-            let configString = typeof config.deviceConfig === 'string'
+            // Get raw config string
+            configString = typeof config.deviceConfig === 'string'
                 ? config.deviceConfig
                 : JSON.stringify(config.deviceConfig);
 
-            // Replace environment variables in the format ${ENV_VAR} or $ENV_VAR
-            configString = configString.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, p1, p2) => {
-                const envVar = p1 || p2;
-                const envValue = RED.util.evaluateNodeProperty(envVar, 'env', node);
-                if (envValue !== undefined) {
-                    // Escape quotes if the value will be inside a JSON string
-                    return String(envValue).replace(/"/g, '\\"');
+            // Replace Mustache templates {{env.X}}, {{flow.X}}, {{global.X}}
+            configString = configString.replace(/\{\{(env|flow|global)\.([^}]+)\}\}/g, (match, context, key) => {
+                let value;
+                if (context === 'env') {
+                    value = RED.util.evaluateNodeProperty(key, 'env', node);
+                } else if (context === 'flow') {
+                    value = node.context().flow.get(key);
+                } else if (context === 'global') {
+                    value = node.context().global.get(key);
                 }
-                node.warn(`Environment variable '${envVar}' not found, keeping original: ${match}`);
-                return match;
+
+                if (value === undefined || value === null) {
+                    node.warn(`Template variable {{${context}.${key}}} not found, using empty string`);
+                    return '""';
+                }
+
+                // Return value as-is (no quotes for numbers, quotes preserved for strings)
+                return value;
             });
 
+            // Parse the resulting string as JSON
             deviceConfig = JSON.parse(configString);
         } catch (e) {
             node.error("Invalid device configuration JSON: " + e.message);

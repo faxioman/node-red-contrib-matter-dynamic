@@ -7,12 +7,9 @@
             bridge: {type: "matter-dynamic-bridge", required: true},
             autoConfirm: {value: false},
             deviceConfig: {value: "{\n  \"deviceType\": \"OnOffLightDevice\"\n}", validate: function(v) {
-                try {
-                    JSON.parse(v);
-                    return true;
-                } catch(e) {
-                    return false;
-                }
+                // Don't validate - Mustache templates make JSON invalid until runtime
+                // The actual validation happens in matter-device.js after template evaluation
+                return v && v.length > 0;
             }}
         },
         inputs: 1,
@@ -64,7 +61,7 @@
         <label for="node-input-deviceConfig"><i class="fa fa-code"></i> Config</label>
         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-deviceConfig-editor"></div>
         <div style="margin-top: 5px; color: #888; font-size: 11px;">
-            <i class="fa fa-info-circle"></i> Supports environment variables: <code>${ENV_VAR}</code> or <code>$ENV_VAR</code>
+            <i class="fa fa-info-circle"></i> Supports Mustache templates: <code>{{env.VAR}}</code>, <code>{{flow.VAR}}</code>, <code>{{global.VAR}}</code>
         </div>
     </div>
 </script>
@@ -78,13 +75,27 @@
         <dd>The Matter device type (e.g., "OnOffLightDevice", "ThermostatDevice")</dd>
     </dl>
 
-    <h3>Environment Variables</h3>
-    <p>The Config field supports environment variables using <code>${ENV_VAR}</code> or <code>$ENV_VAR</code> syntax.
-    This is useful when using the node inside subflows with subflow environment variables.</p>
+    <h3>Mustache Templates</h3>
+    <p>The Config field supports Mustache template syntax for dynamic values.
+    This is useful when using the node inside subflows or accessing flow/global context.</p>
+    <p><b>Supported contexts:</b></p>
+    <ul>
+        <li><code>{{env.VAR}}</code> - Environment variables (subflow or system)</li>
+        <li><code>{{flow.VAR}}</code> - Flow context variables</li>
+        <li><code>{{global.VAR}}</code> - Global context variables</li>
+    </ul>
+    <p><b>Important:</b> Use templates without quotes for numeric values, with quotes for strings.</p>
     <p><b>Example:</b></p>
     <pre>{
-  "deviceType": "${DEVICE_TYPE}"
+  "deviceType": "{{env.DEVICE_TYPE}}",
+  "initialState": {
+    "thermostat": {
+      "localTemperature": {{env.TEMP}},
+      "occupiedHeatingSetpoint": {{flow.setpoint}}
+    }
+  }
 }</pre>
+    <p><b>Note:</b> The editor may show syntax errors for unquoted templates, but they will work correctly at runtime.</p>
 
     <h3>Inputs</h3>
     <p>The payload must match Matter.js cluster structure exactly:</p>
